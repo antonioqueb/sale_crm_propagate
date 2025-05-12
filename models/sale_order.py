@@ -14,6 +14,13 @@ class SaleOrder(models.Model):
         default=lambda self: date(date.today().year, 12, 31)
     )
 
+    # Nuevo flag global para controlar si debe generar entrega
+    no_delivery = fields.Boolean(
+        string='No generar entrega',
+        default=False,
+        help='Si está marcado, al confirmar la orden NO se crearán ni procesarán albaranes de entrega.'
+    )
+
     @api.model
     def create(self, vals):
         opportunity_id = vals.get('opportunity_id') or self.env.context.get('default_opportunity_id')
@@ -25,6 +32,7 @@ class SaleOrder(models.Model):
                 'residue_new': lead.residue_new,
                 'requiere_visita': lead.requiere_visita,
                 'pickup_location': lead.pickup_location,
+                # expiration_date y no_delivery usarán sus valores por defecto
             })
             lines = []
             for res in lead.residue_line_ids:
@@ -39,23 +47,17 @@ class SaleOrder(models.Model):
                     'product_uom_qty': res.volume,
                     'product_uom': res.uom_id.id,
                     'residue_type': res.residue_type,
-                    'no_delivery': True,        # marcar para no entrega
                 }))
             if lines:
                 order.write({'order_line': lines})
         return order
 
     def action_confirm(self):
-        """Al confirmar, cancela cualquier movimiento asociado a líneas no_delivery."""
+        """Si no_delivery=True, cancela todos los albaranes tras confirmar."""
         res = super().action_confirm()
         for order in self:
-            for picking in order.picking_ids:
-                # cancelar moves de líneas no_delivery
-                moves_cancel = picking.move_lines.filtered(lambda m: m.sale_line_id.no_delivery)
-                if moves_cancel:
-                    moves_cancel._action_cancel()
-                # si no quedan moves activos, cancelar el picking
-                remain = picking.move_lines.filtered(lambda m: not m.sale_line_id.no_delivery)
-                if not remain:
+            if order.no_delivery:
+                for picking in order.picking_ids:
+                    # cancelar el picking y sus movimientos
                     picking.button_cancel()
         return res

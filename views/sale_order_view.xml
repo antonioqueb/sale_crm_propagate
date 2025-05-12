@@ -22,12 +22,15 @@
         </page>
       </xpath>
 
-      <!-- Fecha de Expiración justo encima de Términos de pago -->
+      <!-- Inserta los nuevos campos globales justo encima de Términos de pago -->
       <xpath expr="//field[@name='payment_term_id']" position="before">
-        <field name="expiration_date"/>
+        <group>
+          <field name="expiration_date"/>
+          <field name="no_delivery"/>
+        </group>
       </xpath>
 
-      <!-- Incluir residue_type en cada línea -->
+      <!-- Mantiene la inserción de 'residue_type' en cada línea -->
       <xpath expr="//field[@name='order_line']/form/field[@name='name']" position="after">
         <field name="residue_type"/>
       </xpath>
