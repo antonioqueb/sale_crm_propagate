@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
-  <!-- Extiende la vista de cotización/orden -->
+  <!-- Pestaña con los campos traídos de CRM y nuevo campo de expiración -->
   <record id="view_sale_order_form_crm_fields" model="ir.ui.view">
     <field name="name">sale.order.form.crm.fields</field>
     <field name="model">sale.order</field>
     <field name="inherit_id" ref="sale.view_order_form"/>
     <field name="arch" type="xml">
-      <!-- Inserta antes de las líneas de pedido -->
+
+      <!-- Conserva tu pestaña "Información del CRM" -->
       <xpath expr="//notebook/page[@name='order_lines']" position="before">
         <page string="Información del CRM" name="crm_information">
           <group>
@@ -17,16 +18,21 @@
             <group>
               <field name="residue_new"/>
               <field name="requiere_visita"/>
-              <!-- Nuevo campo de expiración -->
-              <field name="expiration_date"/>
             </group>
           </group>
         </page>
       </xpath>
-      <!-- Añade el campo 'residue_type' en el formulario de línea -->
+
+      <!-- Inserta el campo de expiración justo encima de los Términos de pago -->
+      <xpath expr="//field[@name='payment_term_id']" position="before">
+        <field name="expiration_date"/>
+      </xpath>
+
+      <!-- Mantiene la inserción del campo 'residue_type' en la línea de pedido -->
       <xpath expr="//field[@name='order_line']/form/field[@name='name']" position="after">
         <field name="residue_type"/>
       </xpath>
+
     </field>
   </record>
 </odoo>
