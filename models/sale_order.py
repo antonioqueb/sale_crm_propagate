@@ -25,6 +25,12 @@ class SaleOrder(models.Model):
             # Genera líneas de pedido desde crm.lead.residue
             lines = []
             for res in lead.residue_line_ids:
+                # 1) Línea de nota que preserva la descripción original
+                lines.append((0, 0, {
+                    'display_type': 'line_note',
+                    'name': res.name,
+                }))
+                # 2) Línea de producto con descripción inicial
                 lines.append((0, 0, {
                     'name': res.name,
                     'product_uom_qty': res.volume,
