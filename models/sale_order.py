@@ -14,7 +14,7 @@ class SaleOrder(models.Model):
         default=lambda self: date(date.today().year, 12, 31)
     )
 
-    # Nuevo flag global para controlar si debe generar entrega
+    # Flag global para controlar si debe generar entrega
     no_delivery = fields.Boolean(
         string='No generar entrega',
         default=False,
@@ -32,16 +32,15 @@ class SaleOrder(models.Model):
                 'residue_new': lead.residue_new,
                 'requiere_visita': lead.requiere_visita,
                 'pickup_location': lead.pickup_location,
-                # expiration_date y no_delivery usarán sus valores por defecto
             })
             lines = []
             for res in lead.residue_line_ids:
-                # 1) nota
+                # 1) Línea de nota
                 lines.append((0, 0, {
                     'display_type': 'line_note',
                     'name': res.name,
                 }))
-                # 2) línea de producto (residuo)
+                # 2) Línea de producto (residuo)
                 lines.append((0, 0, {
                     'name': res.name,
                     'product_uom_qty': res.volume,
@@ -59,5 +58,5 @@ class SaleOrder(models.Model):
             if order.no_delivery:
                 for picking in order.picking_ids:
                     # cancelar el picking y sus movimientos
-                    picking.button_cancel()
+                    picking.action_cancel()
         return res
