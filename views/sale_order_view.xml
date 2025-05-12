@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+  <!-- Pestaña con los campos traídos de CRM -->
+  <record id="view_sale_order_form_crm_fields" model="ir.ui.view">
+    <field name="name">sale.order.form.crm.fields</field>
+    <field name="model">sale.order</field>
+    <field name="inherit_id" ref="sale.view_order_form"/>
+    <field name="arch" type="xml">
+      <!-- Inserta antes de las líneas de pedido -->
+      <xpath expr="//notebook/page[@name='order_lines']" position="before">
+        <page string="Información del CRM" name="crm_information">
+          <group>
+            <group>
+              <field name="service_frequency"/>
+              <field name="pickup_location"/>
+            </group>
+            <group>
+              <field name="residue_new"/>
+              <field name="requiere_visita"/>
+            </group>
+          </group>
+        </page>
+      </xpath>
+      <!-- Añade el campo 'residue_type' en el formulario de línea -->
+      <xpath expr="//field[@name='order_line']/form/field[@name='name']" position="after">
+        <field name="residue_type"/>
+      </xpath>
+    </field>
+  </record>
+</odoo>
