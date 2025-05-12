@@ -1,4 +1,5 @@
 from odoo import models, fields, api
+from datetime import date
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
@@ -7,6 +8,12 @@ class SaleOrder(models.Model):
     residue_new = fields.Boolean(string='¿Residuo Nuevo?')
     requiere_visita = fields.Boolean(string='Requiere visita presencial')
     pickup_location = fields.Char(string='Ubicación de recolección')
+
+    # Nuevo campo de expiración, por defecto 31-dic del año actual
+    expiration_date = fields.Date(
+        string='Fecha de Expiración',
+        default=lambda self: date(date.today().year, 12, 31)
+    )
 
     @api.model
     def create(self, vals):
@@ -21,6 +28,7 @@ class SaleOrder(models.Model):
                 'residue_new': lead.residue_new,
                 'requiere_visita': lead.requiere_visita,
                 'pickup_location': lead.pickup_location,
+                # Nota: expiration_date ya viene con default, no es necesario sobrescribir
             })
             # Genera líneas de pedido desde crm.lead.residue
             lines = []

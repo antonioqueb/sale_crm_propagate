@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
-  <!-- Pestaña con los campos traídos de CRM -->
+  <!-- Extiende la vista de cotización/orden -->
   <record id="view_sale_order_form_crm_fields" model="ir.ui.view">
     <field name="name">sale.order.form.crm.fields</field>
     <field name="model">sale.order</field>
@@ -17,6 +17,8 @@
             <group>
               <field name="residue_new"/>
               <field name="requiere_visita"/>
+              <!-- Nuevo campo de expiración -->
+              <field name="expiration_date"/>
             </group>
           </group>
         </page>
