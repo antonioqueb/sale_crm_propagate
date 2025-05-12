@@ -32,7 +32,6 @@ class SaleOrder(models.Model):
                 'residue_new': lead.residue_new,
                 'requiere_visita': lead.requiere_visita,
                 'pickup_location': lead.pickup_location,
-                # expiration_date y no_delivery usan valores por defecto
             })
             lines = []
             for res in lead.residue_line_ids:
@@ -52,19 +51,12 @@ class SaleOrder(models.Model):
                 order.write({'order_line': lines})
         return order
 
-    def _create_picking(self):
-        """
-        Override de sale_stock._create_picking: si no_delivery es True,
-        devolvemos un recordset vacío para que no se creen ni pickings ni moves.
-        """
-        if self.no_delivery:
-            return self.env['stock.picking']
-        return super()._create_picking()
-
     def action_confirm(self):
-        """
-        Al confirmar:
-        - Si no_delivery está marcado, salta la creación de albaranes (por el override anterior).
-        - En caso contrario, comportamiento estándar.
-        """
-        return super(SaleOrder, self).action_confirm()
+        """Si no_delivery=True, cancela todos los albaranes tras confirmar."""
+        res = super().action_confirm()
+        for order in self:
+            if order.no_delivery:
+                for picking in order.picking_ids:
+                    # cancelar el picking y sus movimientos
+                    picking.action_cancel()
+        return res
