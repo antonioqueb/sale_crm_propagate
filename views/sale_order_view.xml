@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
-  <!-- Pestaña con los campos traídos de CRM y nuevo campo de expiración -->
   <record id="view_sale_order_form_crm_fields" model="ir.ui.view">
     <field name="name">sale.order.form.crm.fields</field>
     <field name="model">sale.order</field>
@@ -23,12 +22,12 @@
         </page>
       </xpath>
 
-      <!-- Inserta el campo de expiración justo encima de los Términos de pago -->
+      <!-- Fecha de Expiración justo encima de Términos de pago -->
       <xpath expr="//field[@name='payment_term_id']" position="before">
         <field name="expiration_date"/>
       </xpath>
 
-      <!-- Mantiene la inserción del campo 'residue_type' en la línea de pedido -->
+      <!-- Incluir residue_type en cada línea -->
       <xpath expr="//field[@name='order_line']/form/field[@name='name']" position="after">
         <field name="residue_type"/>
       </xpath>
