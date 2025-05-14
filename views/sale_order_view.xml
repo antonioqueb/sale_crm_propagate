@@ -30,9 +30,27 @@
         </group>
       </xpath>
 
-      <!-- Mantiene la inserción de 'residue_type' en cada línea -->
-      <xpath expr="//field[@name='order_line']/form/field[@name='name']" position="after">
+      <!-- Inyecta 'residue_type' y CRETIBM en el tree de order_line -->
+      <xpath expr="//field[@name='order_line']/tree/field[@name='name']" position="after">
         <field name="residue_type"/>
+        <field name="c"/>
+        <field name="r"/>
+        <field name="e"/>
+        <field name="t"/>
+        <field name="i"/>
+        <field name="b"/>
+        <field name="m"/>
+      </xpath>
+
+      <!-- Inyecta CRETIBM en el form embebido de order_line -->
+      <xpath expr="//field[@name='order_line']/form/field[@name='residue_type']" position="after">
+        <field name="c"/>
+        <field name="r"/>
+        <field name="e"/>
+        <field name="t"/>
+        <field name="i"/>
+        <field name="b"/>
+        <field name="m"/>
       </xpath>
 
     </field>
