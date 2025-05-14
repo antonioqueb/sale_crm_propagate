@@ -6,7 +6,7 @@
     <field name="inherit_id" ref="sale.view_order_form"/>
     <field name="arch" type="xml">
 
-      <!-- Conserva tu pestaña "Información del CRM" -->
+      <!-- 1) Pestaña "Información del CRM" antes de Líneas -->
       <xpath expr="//notebook/page[@name='order_lines']" position="before">
         <page string="Información del CRM" name="crm_information">
           <group>
@@ -22,7 +22,7 @@
         </page>
       </xpath>
 
-      <!-- Inserta los nuevos campos globales justo encima de Términos de pago -->
+      <!-- 2) Campos globales antes de Términos de pago -->
       <xpath expr="//field[@name='payment_term_id']" position="before">
         <group>
           <field name="expiration_date"/>
@@ -30,8 +30,8 @@
         </group>
       </xpath>
 
-      <!-- Inyecta 'residue_type' y CRETIBM en el tree de order_line -->
-      <xpath expr="//field[@name='order_line']/tree/field[@name='name']" position="after">
+      <!-- 3) Columnas CRETIBM en la vista de lista de order_line -->
+      <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="after">
         <field name="residue_type"/>
         <field name="c"/>
         <field name="r"/>
@@ -42,8 +42,9 @@
         <field name="m"/>
       </xpath>
 
-      <!-- Inyecta CRETIBM en el form embebido de order_line -->
-      <xpath expr="//field[@name='order_line']/form/field[@name='residue_type']" position="after">
+      <!-- 4) Columnas CRETIBM en el formulario embebido de order_line -->
+      <xpath expr="//field[@name='order_line']/form/field[@name='name']" position="after">
+        <field name="residue_type"/>
         <field name="c"/>
         <field name="r"/>
         <field name="e"/>
