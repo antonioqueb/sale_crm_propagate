@@ -30,7 +30,7 @@
         </group>
       </xpath>
 
-      <!-- 3) Columnas CRETIBM en la vista de lista de order_line -->
+      <!-- 3) Columnas CRETIBM en la vista de lista de order_line, justo después de product_id -->
       <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="after">
         <field name="residue_type"/>
         <field name="c"/>
@@ -42,8 +42,8 @@
         <field name="m"/>
       </xpath>
 
-      <!-- 4) Columnas CRETIBM en el formulario embebido de order_line -->
-      <xpath expr="//field[@name='order_line']/form/field[@name='name']" position="after">
+      <!-- 4) Columnas CRETIBM en el formulario embebido de order_line, justo después de product_id -->
+      <xpath expr="//field[@name='order_line']/form//field[@name='product_id']" position="after">
         <field name="residue_type"/>
         <field name="c"/>
         <field name="r"/>
