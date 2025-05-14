@@ -31,7 +31,7 @@
       </xpath>
 
       <!-- 3) Columnas CRETIBM en la vista de lista de order_line, justo después de product_id -->
-      <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="before">
+      <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="after">
         <field name="residue_type"/>
         <field name="c"/>
         <field name="r"/>
