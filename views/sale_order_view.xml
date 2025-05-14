@@ -30,8 +30,8 @@
         </group>
       </xpath>
 
-      <!-- 3) Columnas CRETIBM en la vista de lista (tree) de order_line, justo después de product_template_id -->
-      <xpath expr="//page[@name='order_lines']//tree/field[@name='product_template_id']" position="after">
+      <!-- 3) Columnas CRETIBM en la vista de lista (list) de order_line, justo después de product_template_id -->
+      <xpath expr="//page[@name='order_lines']//list/field[@name='product_template_id']" position="after">
         <field name="residue_type"/>
         <field name="c"/>
         <field name="r"/>
