@@ -33,6 +33,7 @@ class SaleOrder(models.Model):
                 'residue_new':        lead.residue_new,
                 'requiere_visita':    lead.requiere_visita,
                 'pickup_location':    lead.pickup_location,
+
             })
             # Preparamos líneas: nota + producto con CRETIBM
             lines = []
@@ -48,13 +49,8 @@ class SaleOrder(models.Model):
                     'product_uom_qty': res.volume,
                     'product_uom':     res.uom_id.id,
                     'residue_type':    res.residue_type,
-                    'c':               res.c,
-                    'r':               res.r,
-                    'e':               res.e,
-                    't':               res.t,
-                    'i':               res.i,
-                    'b':               res.b,
-                    'm':               res.m,
+                    'plan_manejo':     res.plan_manejo,
+                
                 }))
             if lines:
                 order.write({'order_line': lines})

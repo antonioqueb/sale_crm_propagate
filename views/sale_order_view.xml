@@ -32,26 +32,14 @@
 
       <!-- 3) Tree: columnas CRETIBM justo después de product_template_id -->
       <xpath expr="//page[@name='order_lines']//list/field[@name='product_template_id']" position="after">
+        <field name="plan_manejo"/>
         <field name="residue_type"/>
-        <field name="c"/>
-        <field name="r"/>
-        <field name="e"/>
-        <field name="t"/>
-        <field name="i"/>
-        <field name="b"/>
-        <field name="m"/>
       </xpath>
 
       <!-- 4) Form embebido: columnas CRETIBM justo después de product_id -->
       <xpath expr="//page[@name='order_lines']//form//field[@name='product_id']" position="after">
+        <field name="plan_manejo"/>
         <field name="residue_type"/>
-        <field name="c"/>
-        <field name="r"/>
-        <field name="e"/>
-        <field name="t"/>
-        <field name="i"/>
-        <field name="b"/>
-        <field name="m"/>
       </xpath>
 
     </field>
