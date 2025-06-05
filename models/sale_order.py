@@ -30,28 +30,24 @@ class SaleOrder(models.Model):
             lead = self.env['crm.lead'].browse(opportunity_id)
             order.write({
                 'service_frequency': lead.service_frequency,
-                'residue_new':        lead.residue_new,
-                'requiere_visita':    lead.requiere_visita,
-                'pickup_location':    lead.pickup_location,
-
+                'residue_new': lead.residue_new,
+                'requiere_visita': lead.requiere_visita,
+                'pickup_location': lead.pickup_location,
             })
-            # Preparamos líneas: nota + producto con CRETIBM
+            
+            # Crear líneas solo con servicios creados
             lines = []
             for res in lead.residue_line_ids:
-                # 1) Línea de nota
-                lines.append((0, 0, {
-                    'display_type': 'line_note',
-                    'name':         res.name,
-                }))
-                # 2) Línea de producto (residuo) con CRETIBM
-                lines.append((0, 0, {
-                    'name':            res.name,
-                    'product_uom_qty': res.volume,
-                    'product_uom':     res.uom_id.id,
-                    'residue_type':    res.residue_type,
-                    'plan_manejo':     res.plan_manejo,
-                
-                }))
+                if hasattr(res, 'product_id') and res.product_id:
+                    lines.append((0, 0, {
+                        'product_id': res.product_id.id,
+                        'name': res.product_id.name,
+                        'product_uom_qty': res.volume,
+                        'product_uom': res.uom_id.id,
+                        'residue_type': res.residue_type,
+                        'plan_manejo': res.plan_manejo,
+                    }))
+            
             if lines:
                 order.write({'order_line': lines})
         return order
