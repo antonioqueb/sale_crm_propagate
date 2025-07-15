@@ -174,7 +174,7 @@
         </group>
       </xpath>
 
-      <!-- 4) Tree: modificar columnas en las líneas -->
+      <!-- 4) Tree: modificar columnas en las líneas - AGREGANDO CAMPOS DE PESO -->
       <xpath expr="//page[@name='order_lines']//list/field[@name='product_template_id']" position="replace">
         
         <!-- Campo de control para decidir crear o seleccionar -->
@@ -189,6 +189,11 @@
         <field name="residue_name" string="Nombre Residuo"/>
         <field name="residue_type" string="Tipo"/>
         <field name="plan_manejo" string="Plan de Manejo"/>
+        
+        <!-- NUEVOS CAMPOS DE PESO Y UNIDADES -->
+        <field name="residue_weight_kg" string="Peso Total (kg)"/>
+        <field name="residue_volume" string="Unidades"/>
+        <field name="weight_per_unit" string="Kg/Unidad" readonly="1"/>
         
       </xpath>
 
@@ -222,14 +227,14 @@
           <field name="residue_name"/>
           <field name="residue_type"/>
           <field name="plan_manejo"/>
-          <field name="residue_volume"/>
-          <field name="residue_uom_id"/>
         </group>
         
-        <!-- Información común - SIEMPRE EDITABLE -->
-        <group string="Información del Residuo">
-          <field name="residue_volume" invisible="create_new_service"/>
-          <field name="residue_uom_id" invisible="create_new_service"/>
+        <!-- Información de cantidades y peso - SIEMPRE EDITABLE Y ACTUALIZADA -->
+        <group string="Cantidades y Peso">
+          <field name="residue_weight_kg" string="Peso Total (kg)" placeholder="Ejemplo: 200"/>
+          <field name="residue_volume" string="Número de Unidades" placeholder="Ejemplo: 1"/>
+          <field name="weight_per_unit" string="Kg por Unidad" readonly="1"/>
+          <field name="residue_uom_id"/>
         </group>
         
       </xpath>

@@ -42,8 +42,32 @@ class SaleOrderLine(models.Model):
 
     # Campos para crear servicios directamente en las líneas
     residue_name = fields.Char(string="Nombre del Residuo")
-    residue_volume = fields.Float(string="Volumen")
+    residue_volume = fields.Float(string="Unidades", default=1.0)  # MODIFICADO: ahora es "Unidades"
+    
+    # NUEVO CAMPO PARA PESO
+    residue_weight_kg = fields.Float(
+        string="Peso Total (kg)",
+        help="Peso total del residuo en kilogramos para sistema de acopio."
+    )
+    
+    # CAMPO COMPUTADO PARA MOSTRAR CONVERSIÓN
+    weight_per_unit = fields.Float(
+        string="Kg por Unidad",
+        compute="_compute_weight_per_unit",
+        store=True,
+        help="Peso promedio por unidad (kg/unidad)"
+    )
+    
     residue_uom_id = fields.Many2one('uom.uom', string="Unidad de Medida")
+
+    @api.depends('residue_volume', 'residue_weight_kg')
+    def _compute_weight_per_unit(self):
+        """Calcular peso promedio por unidad"""
+        for record in self:
+            if record.residue_volume and record.residue_volume > 0:
+                record.weight_per_unit = record.residue_weight_kg / record.residue_volume
+            else:
+                record.weight_per_unit = 0.0
 
     @api.onchange('create_new_service')
     def _onchange_create_new_service_line(self):
@@ -104,11 +128,11 @@ class SaleOrderLine(models.Model):
                     break
             
             # Extraer nombre del residuo del nombre del servicio
-            if 'servicio de recolección de' in service.name.lower():
+            if 'Servicio Recolección de' in service.name.lower():
                 # Extraer el nombre del residuo del nombre del servicio
                 parts = service.name.split(' - ')
                 if len(parts) > 0:
-                    residue_part = parts[0].replace('Servicio de Recolección de ', '')
+                    residue_part = parts[0].replace('Servicio Recolección de ', '')
                     self.residue_name = residue_part
 
     @api.onchange('residue_name', 'plan_manejo', 'residue_type')
@@ -137,7 +161,7 @@ class SaleOrderLine(models.Model):
         plan_manejo_label = dict(self._fields['plan_manejo'].selection).get(self.plan_manejo, '')
         residue_type_label = dict(self._fields['residue_type'].selection).get(self.residue_type, '')
         
-        service_name = f"Servicio de Recolección de {self.residue_name} - {plan_manejo_label}"
+        service_name = f"Servicio Recolección de {self.residue_name} - {plan_manejo_label}"
         
         service = self.env['product.product'].create({
             'name': service_name,
@@ -148,7 +172,8 @@ class SaleOrderLine(models.Model):
             'description_sale': f"""Servicio de manejo de residuo: {self.residue_name}
 Plan de manejo: {plan_manejo_label}
 Tipo de residuo: {residue_type_label}
-Volumen: {self.residue_volume} {self.residue_uom_id.name if self.residue_uom_id else ''}""",
+Peso estimado: {self.residue_weight_kg} kg
+Unidades: {self.residue_volume} {self.residue_uom_id.name if self.residue_uom_id else ''}""",
             'default_code': f"SRV-{self.residue_type.upper()}-{self.id or 'NEW'}",
         })
 
@@ -377,7 +402,7 @@ class SaleOrder(models.Model):
                 'conversation_notes': lead.conversation_notes,
             })
             
-            # Crear líneas solo con servicios creados
+            # Crear líneas solo con servicios creados - INCLUYENDO DATOS DE PESO
             lines = []
             for res in lead.residue_line_ids:
                 if hasattr(res, 'product_id') and res.product_id:
@@ -391,6 +416,8 @@ class SaleOrder(models.Model):
                         'create_new_service': res.create_new_service,
                         'residue_name': res.name,
                         'residue_volume': res.volume,
+                        'residue_weight_kg': res.weight_kg,  # NUEVO CAMPO
+                        'weight_per_unit': res.weight_per_unit,  # NUEVO CAMPO
                         'residue_uom_id': res.uom_id.id,
                     }))
             
@@ -545,8 +572,32 @@ class SaleOrderLine(models.Model):
 
     # Campos para crear servicios directamente en las líneas
     residue_name = fields.Char(string="Nombre del Residuo")
-    residue_volume = fields.Float(string="Volumen")
+    residue_volume = fields.Float(string="Unidades", default=1.0)  # MODIFICADO: ahora es "Unidades"
+    
+    # NUEVO CAMPO PARA PESO
+    residue_weight_kg = fields.Float(
+        string="Peso Total (kg)",
+        help="Peso total del residuo en kilogramos para sistema de acopio."
+    )
+    
+    # CAMPO COMPUTADO PARA MOSTRAR CONVERSIÓN
+    weight_per_unit = fields.Float(
+        string="Kg por Unidad",
+        compute="_compute_weight_per_unit",
+        store=True,
+        help="Peso promedio por unidad (kg/unidad)"
+    )
+    
     residue_uom_id = fields.Many2one('uom.uom', string="Unidad de Medida")
+
+    @api.depends('residue_volume', 'residue_weight_kg')
+    def _compute_weight_per_unit(self):
+        """Calcular peso promedio por unidad"""
+        for record in self:
+            if record.residue_volume and record.residue_volume > 0:
+                record.weight_per_unit = record.residue_weight_kg / record.residue_volume
+            else:
+                record.weight_per_unit = 0.0
 
     @api.onchange('create_new_service')
     def _onchange_create_new_service_line(self):
@@ -607,11 +658,11 @@ class SaleOrderLine(models.Model):
                     break
             
             # Extraer nombre del residuo del nombre del servicio
-            if 'servicio de recolección de' in service.name.lower():
+            if 'Servicio Recolección de' in service.name.lower():
                 # Extraer el nombre del residuo del nombre del servicio
                 parts = service.name.split(' - ')
                 if len(parts) > 0:
-                    residue_part = parts[0].replace('Servicio de Recolección de ', '')
+                    residue_part = parts[0].replace('Servicio Recolección de ', '')
                     self.residue_name = residue_part
 
     @api.onchange('residue_name', 'plan_manejo', 'residue_type')
@@ -640,7 +691,7 @@ class SaleOrderLine(models.Model):
         plan_manejo_label = dict(self._fields['plan_manejo'].selection).get(self.plan_manejo, '')
         residue_type_label = dict(self._fields['residue_type'].selection).get(self.residue_type, '')
         
-        service_name = f"Servicio de Recolección de {self.residue_name} - {plan_manejo_label}"
+        service_name = f"Servicio Recolección de {self.residue_name} - {plan_manejo_label}"
         
         service = self.env['product.product'].create({
             'name': service_name,
@@ -651,7 +702,8 @@ class SaleOrderLine(models.Model):
             'description_sale': f"""Servicio de manejo de residuo: {self.residue_name}
 Plan de manejo: {plan_manejo_label}
 Tipo de residuo: {residue_type_label}
-Volumen: {self.residue_volume} {self.residue_uom_id.name if self.residue_uom_id else ''}""",
+Peso estimado: {self.residue_weight_kg} kg
+Unidades: {self.residue_volume} {self.residue_uom_id.name if self.residue_uom_id else ''}""",
             'default_code': f"SRV-{self.residue_type.upper()}-{self.id or 'NEW'}",
         })
 
@@ -880,7 +932,7 @@ class SaleOrder(models.Model):
                 'conversation_notes': lead.conversation_notes,
             })
             
-            # Crear líneas solo con servicios creados
+            # Crear líneas solo con servicios creados - INCLUYENDO DATOS DE PESO
             lines = []
             for res in lead.residue_line_ids:
                 if hasattr(res, 'product_id') and res.product_id:
@@ -894,6 +946,8 @@ class SaleOrder(models.Model):
                         'create_new_service': res.create_new_service,
                         'residue_name': res.name,
                         'residue_volume': res.volume,
+                        'residue_weight_kg': res.weight_kg,  # NUEVO CAMPO
+                        'weight_per_unit': res.weight_per_unit,  # NUEVO CAMPO
                         'residue_uom_id': res.uom_id.id,
                     }))
             
@@ -1197,6 +1251,11 @@ class SaleOrder(models.Model):
         <field name="residue_type" string="Tipo"/>
         <field name="plan_manejo" string="Plan de Manejo"/>
         
+        <!-- NUEVOS CAMPOS DE PESO Y UNIDADES -->
+        <field name="residue_weight_kg" string="Peso Total (kg)"/>
+        <field name="residue_volume" string="Unidades"/>
+        <field name="weight_per_unit" string="Kg/Unidad" readonly="1"/>
+        
       </xpath>
 
       <!-- 5) Agregar campos en el final de la lista -->
@@ -1229,14 +1288,14 @@ class SaleOrder(models.Model):
           <field name="residue_name"/>
           <field name="residue_type"/>
           <field name="plan_manejo"/>
-          <field name="residue_volume"/>
-          <field name="residue_uom_id"/>
         </group>
         
-        <!-- Información común - SIEMPRE EDITABLE -->
-        <group string="Información del Residuo">
-          <field name="residue_volume" invisible="create_new_service"/>
-          <field name="residue_uom_id" invisible="create_new_service"/>
+        <!-- Información de cantidades y peso - SIEMPRE EDITABLE -->
+        <group string="Cantidades y Peso">
+          <field name="residue_weight_kg" string="Peso Total (kg)" placeholder="Ejemplo: 200"/>
+          <field name="residue_volume" string="Número de Unidades" placeholder="Ejemplo: 1"/>
+          <field name="weight_per_unit" string="Kg por Unidad" readonly="1"/>
+          <field name="residue_uom_id"/>
         </group>
         
       </xpath>

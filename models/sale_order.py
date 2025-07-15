@@ -201,7 +201,7 @@ class SaleOrder(models.Model):
                 'conversation_notes': lead.conversation_notes,
             })
             
-            # Crear líneas solo con servicios creados
+            # Crear líneas solo con servicios creados - INCLUYENDO DATOS DE PESO
             lines = []
             for res in lead.residue_line_ids:
                 if hasattr(res, 'product_id') and res.product_id:
@@ -215,6 +215,8 @@ class SaleOrder(models.Model):
                         'create_new_service': res.create_new_service,
                         'residue_name': res.name,
                         'residue_volume': res.volume,
+                        'residue_weight_kg': res.weight_kg,  # NUEVO CAMPO
+                        'weight_per_unit': res.weight_per_unit,  # NUEVO CAMPO
                         'residue_uom_id': res.uom_id.id,
                     }))
             
