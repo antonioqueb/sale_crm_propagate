@@ -7,6 +7,7 @@
     'depends': ['crm_custom_fields', 'sale'],
     'data': [
         'views/sale_order_view.xml',
+        'reports/sale_order_report_template.xml',
     ],
     'installable': True,
     'application': False,

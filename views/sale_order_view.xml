@@ -6,40 +6,240 @@
     <field name="inherit_id" ref="sale.view_order_form"/>
     <field name="arch" type="xml">
 
-      <!-- 1) Pestaña "Información del CRM" antes de Líneas -->
-      <xpath expr="//notebook/page[@name='order_lines']" position="before">
-        <page string="Información del CRM" name="crm_information">
-          <group>
+      <!-- 1) Pestaña "Informe General" después de Líneas de la Orden -->
+      <xpath expr="//notebook/page[@name='order_lines']" position="after">
+        
+        <!-- Nueva página: Gestión de Servicios -->
+        <page string="Gestión de Servicios" name="service_management">
+          
+          <!-- Control global de servicios -->
+          <group string="Configuración de Servicios">
+            <field name="always_service"/>
+          </group>
+
+          <!-- Información del Servicio -->
+          <group string="Información del Servicio">
             <group>
-              <field name="service_frequency"/>
-              <field name="pickup_location"/>
+              <field name="service_frequency" readonly="1"/>
+              <field name="pickup_location" readonly="1"/>
             </group>
             <group>
-              <field name="residue_new"/>
-              <field name="requiere_visita"/>
+              <field name="residue_new" readonly="1"/>
+              <field name="requiere_visita" readonly="1"/>
             </group>
           </group>
+
+          <!-- Información Básica del Prospecto -->
+          <group string="Información Básica del Prospecto">
+            <group>
+              <field name="company_size" readonly="1"/>
+              <field name="industrial_sector" readonly="1"/>
+            </group>
+            <group>
+              <field name="prospect_priority" readonly="1"/>
+              <field name="estimated_business_potential" readonly="1"/>
+            </group>
+          </group>
+
+        </page>
+
+        <page string="Informe General" name="general_report">
+
+          <!-- Información Operativa -->
+          <group string="Información Operativa">
+            <group>
+              <field name="access_restrictions" widget="text" readonly="1"/>
+              <field name="allowed_collection_schedules" widget="text" readonly="1"/>
+              <field name="current_container_types" widget="text" readonly="1"/>
+            </group>
+            <group>
+              <field name="special_handling_conditions" widget="text" readonly="1"/>
+              <field name="seasonality" widget="text" readonly="1"/>
+            </group>
+          </group>
+
+          <!-- Información Regulatoria -->
+          <group string="Información Regulatoria">
+            <group>
+              <field name="waste_generator_registration" readonly="1"/>
+              <field name="environmental_authorizations" widget="text" readonly="1"/>
+            </group>
+            <group>
+              <field name="quality_certifications" widget="text" readonly="1"/>
+              <field name="other_relevant_permits" widget="text" readonly="1"/>
+            </group>
+          </group>
+
+          <!-- Competencia y Mercado -->
+          <group string="Competencia y Mercado">
+            <group>
+              <field name="current_service_provider" readonly="1"/>
+              <field name="current_costs" readonly="1"/>
+              <field name="current_provider_satisfaction" readonly="1"/>
+            </group>
+            <group>
+              <field name="reason_for_new_provider" widget="text" readonly="1"/>
+            </group>
+          </group>
+
+          <!-- Requerimientos Especiales -->
+          <group string="Requerimientos Especiales">
+            <group>
+              <field name="specific_certificates_needed" widget="text" readonly="1"/>
+              <field name="reporting_requirements" widget="text" readonly="1"/>
+            </group>
+            <group>
+              <field name="service_urgency" readonly="1"/>
+              <field name="estimated_budget" readonly="1"/>
+            </group>
+          </group>
+
+          <!-- Campos de Seguimiento -->
+          <group string="Seguimiento">
+            <group>
+              <field name="next_contact_date" readonly="1"/>
+              <field name="pending_actions" widget="text" readonly="1"/>
+            </group>
+            <group>
+              <field name="conversation_notes" widget="text" readonly="1"/>
+            </group>
+          </group>
+
         </page>
       </xpath>
 
-      <!-- 2) Campos globales antes de Términos de pago -->
+      <!-- 2) Pestaña "Cotizaciones Relacionadas" -->
+      <xpath expr="//notebook/page[@name='general_report']" position="after">
+        <page string="Cotizaciones Relacionadas" name="related_quotations">
+          
+          <!-- Sección de referencia a cotización anterior -->
+          <group string="Referencia">
+            <field name="related_quotation_id" 
+                   options="{'no_create': True}" 
+                   placeholder="Seleccionar cotización anterior para este cliente..."/>
+          </group>
+
+          <!-- Botones de acción -->
+          <div class="oe_button_box">
+            <button type="object" 
+                    name="action_view_child_quotations" 
+                    class="oe_stat_button" 
+                    icon="fa-list-alt"
+                    invisible="child_quotations_count == 0">
+              <field name="child_quotations_count" widget="statinfo" string="Cotizaciones Derivadas"/>
+            </button>
+          </div>
+
+          <div class="row mt-3">
+            <div class="col-12">
+              <button type="object" 
+                      name="action_create_related_quotation" 
+                      string="Crear Nueva Cotización para este Cliente" 
+                      class="btn btn-primary"
+                      icon="fa-plus"/>
+            </div>
+          </div>
+
+          <!-- Información de la cotización relacionada (solo lectura) -->
+          <group string="Información de Cotización Relacionada" 
+                 invisible="not related_quotation_id">
+            <field name="related_quotation_id" invisible="1"/>
+            <label for="related_quotation_id" string="Cotización Base:"/>
+            <div class="o_row">
+              <field name="related_quotation_id" readonly="1" nolabel="1"/>
+            </div>
+          </group>
+
+          <!-- Lista de cotizaciones derivadas -->
+          <group string="Cotizaciones Derivadas de esta Propuesta" 
+                 invisible="child_quotations_count == 0">
+            <field name="child_quotations_ids" nolabel="1" readonly="1">
+              <list>
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="date_order"/>
+                <field name="state"/>
+                <field name="amount_total"/>
+              </list>
+            </field>
+          </group>
+
+        </page>
+      </xpath>
+
+      <!-- 3) Campos globales antes de Términos de pago -->
       <xpath expr="//field[@name='payment_term_id']" position="before">
         <group>
           <field name="expiration_date"/>
-          <field name="no_delivery"/>
         </group>
       </xpath>
 
-      <!-- 3) Tree: columnas CRETIBM justo después de product_template_id -->
-      <xpath expr="//page[@name='order_lines']//list/field[@name='product_template_id']" position="after">
-        <field name="plan_manejo"/>
-        <field name="residue_type"/>
+      <!-- 4) Tree: modificar columnas en las líneas -->
+      <xpath expr="//page[@name='order_lines']//list/field[@name='product_template_id']" position="replace">
+        
+        <!-- Mostrar campo de control -->
+        <field name="create_new_service" string="Crear Nuevo" invisible="not parent.always_service"/>
+        
+        <!-- Campo para servicio existente -->
+        <field name="product_template_id" 
+               string="Servicio Existente"
+               invisible="create_new_service and parent.always_service" 
+               context="{'partner_id': parent.partner_id, 'quantity': product_uom_qty, 'pricelist': parent.pricelist_id, 'uom':product_uom, 'company_id': parent.company_id}" 
+               force_save="1" 
+               options="{'no_open': True}" 
+               domain="[('sale_ok', '=', True), '|', ('company_id', '=', False), ('company_id', '=', parent.company_id)]"/>
+        
+        <!-- Campos para crear nuevo servicio -->
+        <field name="residue_name" 
+               string="Nombre Residuo" 
+               invisible="not create_new_service or not parent.always_service"/>
+        <field name="residue_type" 
+               string="Tipo" 
+               invisible="not create_new_service or not parent.always_service"/>
+        <field name="plan_manejo" 
+               string="Plan de Manejo" 
+               invisible="not create_new_service or not parent.always_service"/>
+        
       </xpath>
 
-      <!-- 4) Form embebido: columnas CRETIBM justo después de product_id -->
-      <xpath expr="//page[@name='order_lines']//form//field[@name='product_id']" position="after">
-        <field name="plan_manejo"/>
-        <field name="residue_type"/>
+      <!-- 5) Agregar campos en el final de la lista -->
+      <xpath expr="//page[@name='order_lines']//list/field[@name='price_subtotal']" position="after">
+        <field name="product_id" invisible="1"/>
+      </xpath>
+
+      <!-- 6) Form embebido: modificar campos de las líneas -->
+      <xpath expr="//page[@name='order_lines']//form//field[@name='product_id']" position="replace">
+        
+        <!-- Control de creación -->
+        <field name="create_new_service" invisible="not parent.always_service"/>
+        
+        <!-- Campo producto para servicio existente -->
+        <field name="product_id" 
+               string="Servicio Existente"
+               invisible="create_new_service and parent.always_service"
+               context="{'partner_id': parent.partner_id, 'quantity': product_uom_qty, 'pricelist': parent.pricelist_id, 'uom':product_uom, 'company_id': parent.company_id}" 
+               force_save="1" 
+               domain="[('sale_ok', '=', True), '|', ('company_id', '=', False), ('company_id', '=', parent.company_id)]"/>
+        
+        <!-- Campos para crear nuevo servicio -->
+        <group string="Crear Nuevo Servicio" invisible="not create_new_service or not parent.always_service">
+          <field name="residue_name"/>
+          <field name="residue_type"/>
+          <field name="plan_manejo"/>
+          <field name="residue_volume"/>
+          <field name="residue_uom_id"/>
+        </group>
+        
+      </xpath>
+
+      <!-- 7) Agregar botón en el header (arriba a la derecha) -->
+      <xpath expr="//header" position="inside">
+        <button type="object" 
+                name="action_create_related_quotation" 
+                string="Nueva Cotización" 
+                class="btn btn-secondary"
+                invisible="state not in ['draft', 'sent']"
+                help="Crear una nueva cotización para este cliente con nuevos residuos"/>
       </xpath>
 
     </field>
