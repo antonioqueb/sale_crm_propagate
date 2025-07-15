@@ -1,6 +1,6 @@
 -e ### ./models/sale_order_line.py
 ```
-from odoo import models, fields
+from odoo import models, fields, api
 
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
@@ -9,7 +9,7 @@ class SaleOrderLine(models.Model):
         [('rsu', 'RSU'), ('rme', 'RME'), ('rp', 'RP')],
         string='Tipo de manejo'
     )
-    # AGREGAR ESTE CAMPO
+    
     plan_manejo = fields.Selection(
         selection=[
             ('reciclaje', 'Reciclaje'),
@@ -24,6 +24,152 @@ class SaleOrderLine(models.Model):
         string="Plan de Manejo",
         help="Método de tratamiento y/o disposición final para el residuo según normatividad ambiental."
     )
+
+    # Campo para controlar el modo de selección
+    create_new_service = fields.Boolean(
+        string="Crear Nuevo Servicio",
+        default=False,  # Por defecto permitir seleccionar servicios existentes
+        help="Marca para crear un nuevo servicio, desmarca para seleccionar uno existente"
+    )
+
+    # Campo para seleccionar servicio existente (similar al CRM)
+    existing_service_id = fields.Many2one(
+        'product.product',
+        string="Seleccionar Servicio Existente",
+        domain="[('type', '=', 'service'), ('categ_id.name', 'ilike', 'servicios de residuos')]",
+        help="Selecciona un servicio existente en lugar de crear uno nuevo"
+    )
+
+    # Campos para crear servicios directamente en las líneas
+    residue_name = fields.Char(string="Nombre del Residuo")
+    residue_volume = fields.Float(string="Volumen")
+    residue_uom_id = fields.Many2one('uom.uom', string="Unidad de Medida")
+
+    @api.onchange('create_new_service')
+    def _onchange_create_new_service_line(self):
+        """Limpiar campos según la opción seleccionada"""
+        if self.create_new_service:
+            # Si cambia a crear nuevo servicio, limpiar servicio existente
+            self.existing_service_id = False
+            self.product_id = False
+            self.product_template_id = False
+            # Mantener otros campos para que el usuario pueda editarlos
+        else:
+            # Si cambia a usar servicio existente, NO limpiar campos inmediatamente
+            # Los campos se actualizarán cuando seleccione un servicio
+            pass
+
+    @api.onchange('existing_service_id')
+    def _onchange_existing_service_id(self):
+        """Asignar servicio existente seleccionado"""
+        if self.existing_service_id and not self.create_new_service:
+            service = self.existing_service_id
+            self.product_id = service.id
+            self.product_template_id = service.product_tmpl_id.id
+            self.name = service.name
+            
+            # Intentar extraer información del código del producto o descripción
+            if service.default_code:
+                # Ejemplo: SRV-RSU-123 -> extraer RSU
+                parts = service.default_code.split('-')
+                if len(parts) >= 2:
+                    residue_type_map = {'RSU': 'rsu', 'RME': 'rme', 'RP': 'rp'}
+                    if parts[1] in residue_type_map:
+                        self.residue_type = residue_type_map[parts[1]]
+            
+            # Intentar extraer plan de manejo de la descripción o nombre
+            description = (service.description_sale or service.name or '').lower()
+            plan_map = {
+                'reciclaje': 'reciclaje',
+                'co-procesamiento': 'coprocesamiento', 
+                'coprocesamiento': 'coprocesamiento',
+                'físico-químico': 'tratamiento_fisicoquimico',
+                'fisicoquimico': 'tratamiento_fisicoquimico',
+                'biológico': 'tratamiento_biologico',
+                'biologico': 'tratamiento_biologico',
+                'térmico': 'tratamiento_termico',
+                'termico': 'tratamiento_termico',
+                'incineración': 'tratamiento_termico',
+                'incineracion': 'tratamiento_termico',
+                'confinamiento': 'confinamiento_controlado',
+                'reutilización': 'reutilizacion',
+                'reutilizacion': 'reutilizacion',
+                'destrucción': 'destruccion_fiscal',
+                'destruccion': 'destruccion_fiscal',
+            }
+            
+            for key, value in plan_map.items():
+                if key in description:
+                    self.plan_manejo = value
+                    break
+            
+            # Extraer nombre del residuo del nombre del servicio
+            if 'servicio de recolección de' in service.name.lower():
+                # Extraer el nombre del residuo del nombre del servicio
+                parts = service.name.split(' - ')
+                if len(parts) > 0:
+                    residue_part = parts[0].replace('Servicio de Recolección de ', '')
+                    self.residue_name = residue_part
+
+    @api.onchange('residue_name', 'plan_manejo', 'residue_type')
+    def _onchange_residue_fields(self):
+        """Crear automáticamente el servicio cuando se completan los campos"""
+        if (self.create_new_service and self.residue_name and 
+            self.plan_manejo and self.residue_type and not self.product_id):
+            self._create_service_from_line_data()
+
+    def _create_service_from_line_data(self):
+        """Crear un servicio basado en los datos de la línea"""
+        if not (self.residue_name and self.plan_manejo and self.residue_type):
+            return
+
+        # Obtener categoría para servicios de residuos
+        category = self.env['product.category'].search([
+            ('name', 'ilike', 'servicios de residuos')
+        ], limit=1)
+        
+        if not category:
+            category = self.env['product.category'].create({
+                'name': 'Servicios de Residuos',
+            })
+
+        # Crear el producto/servicio
+        plan_manejo_label = dict(self._fields['plan_manejo'].selection).get(self.plan_manejo, '')
+        residue_type_label = dict(self._fields['residue_type'].selection).get(self.residue_type, '')
+        
+        service_name = f"Servicio de Recolección de {self.residue_name} - {plan_manejo_label}"
+        
+        service = self.env['product.product'].create({
+            'name': service_name,
+            'type': 'service',
+            'categ_id': category.id,
+            'sale_ok': True,
+            'purchase_ok': False,
+            'description_sale': f"""Servicio de manejo de residuo: {self.residue_name}
+Plan de manejo: {plan_manejo_label}
+Tipo de residuo: {residue_type_label}
+Volumen: {self.residue_volume} {self.residue_uom_id.name if self.residue_uom_id else ''}""",
+            'default_code': f"SRV-{self.residue_type.upper()}-{self.id or 'NEW'}",
+        })
+
+        # Asignar el servicio creado
+        self.product_id = service.id
+        self.product_template_id = service.product_tmpl_id.id
+        self.name = service.name
+        if self.residue_volume:
+            self.product_uom_qty = self.residue_volume
+        if self.residue_uom_id:
+            self.product_uom = self.residue_uom_id.id
+
+    @api.onchange('order_id.always_service')
+    def _onchange_order_always_service(self):
+        """Cuando cambia el campo always_service de la orden, ajustar el comportamiento"""
+        if hasattr(self.order_id, 'always_service') and self.order_id.always_service:
+            # Si la orden siempre es de servicios, permitir ambas opciones
+            pass
+        else:
+            # Si no es específicamente de servicios, permitir selección normal
+            self.create_new_service = False
 ```
 
 -e ### ./models/sale_order.py
@@ -39,6 +185,7 @@ class SaleOrder(models.Model):
     requiere_visita = fields.Boolean(string='Requiere visita presencial')
     pickup_location = fields.Char(string='Ubicación de recolección')
 
+    # CAMPO QUE FALTABA - AÑADIDO
     expiration_date = fields.Date(
         string='Fecha de Expiración',
         default=lambda self: date(date.today().year, 12, 31)
@@ -50,7 +197,14 @@ class SaleOrder(models.Model):
         help='Si está marcado, al confirmar la orden NO se crearán ni procesarán albaranes de entrega.'
     )
 
-    # NUEVO CAMPO: Referencia a cotización anterior
+    # Campo booleano para controlar si siempre es servicio
+    always_service = fields.Boolean(
+        string='Siempre Servicios de Residuos',
+        default=True,
+        help='Cuando está marcado, las líneas se configuran por defecto para servicios de residuos'
+    )
+
+    # Referencia a cotización anterior
     related_quotation_id = fields.Many2one(
         'sale.order',
         string='Cotización Relacionada',
@@ -173,6 +327,7 @@ class SaleOrder(models.Model):
                 'default_company_size': self.company_size,
                 'default_industrial_sector': self.industrial_sector,
                 'default_prospect_priority': self.prospect_priority,
+                'default_always_service': True,
             }
         }
 
@@ -189,6 +344,7 @@ class SaleOrder(models.Model):
                 'residue_new': lead.residue_new,
                 'requiere_visita': lead.requiere_visita,
                 'pickup_location': lead.pickup_location,
+                'always_service': True,  # Siempre true cuando viene de CRM
                 # INFORMACIÓN BÁSICA DEL PROSPECTO
                 'company_size': lead.company_size,
                 'industrial_sector': lead.industrial_sector,
@@ -232,6 +388,10 @@ class SaleOrder(models.Model):
                         'product_uom': res.uom_id.id,
                         'residue_type': res.residue_type,
                         'plan_manejo': res.plan_manejo,
+                        'create_new_service': res.create_new_service,
+                        'residue_name': res.name,
+                        'residue_volume': res.volume,
+                        'residue_uom_id': res.uom_id.id,
                     }))
             
             if lines:
@@ -343,7 +503,7 @@ class SaleOrder(models.Model):
 ```
 -e ### ./models/sale_order_line.py
 ```
-from odoo import models, fields
+from odoo import models, fields, api
 
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
@@ -352,7 +512,7 @@ class SaleOrderLine(models.Model):
         [('rsu', 'RSU'), ('rme', 'RME'), ('rp', 'RP')],
         string='Tipo de manejo'
     )
-    # AGREGAR ESTE CAMPO
+    
     plan_manejo = fields.Selection(
         selection=[
             ('reciclaje', 'Reciclaje'),
@@ -367,6 +527,152 @@ class SaleOrderLine(models.Model):
         string="Plan de Manejo",
         help="Método de tratamiento y/o disposición final para el residuo según normatividad ambiental."
     )
+
+    # Campo para controlar el modo de selección
+    create_new_service = fields.Boolean(
+        string="Crear Nuevo Servicio",
+        default=False,  # Por defecto permitir seleccionar servicios existentes
+        help="Marca para crear un nuevo servicio, desmarca para seleccionar uno existente"
+    )
+
+    # Campo para seleccionar servicio existente (similar al CRM)
+    existing_service_id = fields.Many2one(
+        'product.product',
+        string="Seleccionar Servicio Existente",
+        domain="[('type', '=', 'service'), ('categ_id.name', 'ilike', 'servicios de residuos')]",
+        help="Selecciona un servicio existente en lugar de crear uno nuevo"
+    )
+
+    # Campos para crear servicios directamente en las líneas
+    residue_name = fields.Char(string="Nombre del Residuo")
+    residue_volume = fields.Float(string="Volumen")
+    residue_uom_id = fields.Many2one('uom.uom', string="Unidad de Medida")
+
+    @api.onchange('create_new_service')
+    def _onchange_create_new_service_line(self):
+        """Limpiar campos según la opción seleccionada"""
+        if self.create_new_service:
+            # Si cambia a crear nuevo servicio, limpiar servicio existente
+            self.existing_service_id = False
+            self.product_id = False
+            self.product_template_id = False
+            # Mantener otros campos para que el usuario pueda editarlos
+        else:
+            # Si cambia a usar servicio existente, NO limpiar campos inmediatamente
+            # Los campos se actualizarán cuando seleccione un servicio
+            pass
+
+    @api.onchange('existing_service_id')
+    def _onchange_existing_service_id(self):
+        """Asignar servicio existente seleccionado"""
+        if self.existing_service_id and not self.create_new_service:
+            service = self.existing_service_id
+            self.product_id = service.id
+            self.product_template_id = service.product_tmpl_id.id
+            self.name = service.name
+            
+            # Intentar extraer información del código del producto o descripción
+            if service.default_code:
+                # Ejemplo: SRV-RSU-123 -> extraer RSU
+                parts = service.default_code.split('-')
+                if len(parts) >= 2:
+                    residue_type_map = {'RSU': 'rsu', 'RME': 'rme', 'RP': 'rp'}
+                    if parts[1] in residue_type_map:
+                        self.residue_type = residue_type_map[parts[1]]
+            
+            # Intentar extraer plan de manejo de la descripción o nombre
+            description = (service.description_sale or service.name or '').lower()
+            plan_map = {
+                'reciclaje': 'reciclaje',
+                'co-procesamiento': 'coprocesamiento', 
+                'coprocesamiento': 'coprocesamiento',
+                'físico-químico': 'tratamiento_fisicoquimico',
+                'fisicoquimico': 'tratamiento_fisicoquimico',
+                'biológico': 'tratamiento_biologico',
+                'biologico': 'tratamiento_biologico',
+                'térmico': 'tratamiento_termico',
+                'termico': 'tratamiento_termico',
+                'incineración': 'tratamiento_termico',
+                'incineracion': 'tratamiento_termico',
+                'confinamiento': 'confinamiento_controlado',
+                'reutilización': 'reutilizacion',
+                'reutilizacion': 'reutilizacion',
+                'destrucción': 'destruccion_fiscal',
+                'destruccion': 'destruccion_fiscal',
+            }
+            
+            for key, value in plan_map.items():
+                if key in description:
+                    self.plan_manejo = value
+                    break
+            
+            # Extraer nombre del residuo del nombre del servicio
+            if 'servicio de recolección de' in service.name.lower():
+                # Extraer el nombre del residuo del nombre del servicio
+                parts = service.name.split(' - ')
+                if len(parts) > 0:
+                    residue_part = parts[0].replace('Servicio de Recolección de ', '')
+                    self.residue_name = residue_part
+
+    @api.onchange('residue_name', 'plan_manejo', 'residue_type')
+    def _onchange_residue_fields(self):
+        """Crear automáticamente el servicio cuando se completan los campos"""
+        if (self.create_new_service and self.residue_name and 
+            self.plan_manejo and self.residue_type and not self.product_id):
+            self._create_service_from_line_data()
+
+    def _create_service_from_line_data(self):
+        """Crear un servicio basado en los datos de la línea"""
+        if not (self.residue_name and self.plan_manejo and self.residue_type):
+            return
+
+        # Obtener categoría para servicios de residuos
+        category = self.env['product.category'].search([
+            ('name', 'ilike', 'servicios de residuos')
+        ], limit=1)
+        
+        if not category:
+            category = self.env['product.category'].create({
+                'name': 'Servicios de Residuos',
+            })
+
+        # Crear el producto/servicio
+        plan_manejo_label = dict(self._fields['plan_manejo'].selection).get(self.plan_manejo, '')
+        residue_type_label = dict(self._fields['residue_type'].selection).get(self.residue_type, '')
+        
+        service_name = f"Servicio de Recolección de {self.residue_name} - {plan_manejo_label}"
+        
+        service = self.env['product.product'].create({
+            'name': service_name,
+            'type': 'service',
+            'categ_id': category.id,
+            'sale_ok': True,
+            'purchase_ok': False,
+            'description_sale': f"""Servicio de manejo de residuo: {self.residue_name}
+Plan de manejo: {plan_manejo_label}
+Tipo de residuo: {residue_type_label}
+Volumen: {self.residue_volume} {self.residue_uom_id.name if self.residue_uom_id else ''}""",
+            'default_code': f"SRV-{self.residue_type.upper()}-{self.id or 'NEW'}",
+        })
+
+        # Asignar el servicio creado
+        self.product_id = service.id
+        self.product_template_id = service.product_tmpl_id.id
+        self.name = service.name
+        if self.residue_volume:
+            self.product_uom_qty = self.residue_volume
+        if self.residue_uom_id:
+            self.product_uom = self.residue_uom_id.id
+
+    @api.onchange('order_id.always_service')
+    def _onchange_order_always_service(self):
+        """Cuando cambia el campo always_service de la orden, ajustar el comportamiento"""
+        if hasattr(self.order_id, 'always_service') and self.order_id.always_service:
+            # Si la orden siempre es de servicios, permitir ambas opciones
+            pass
+        else:
+            # Si no es específicamente de servicios, permitir selección normal
+            self.create_new_service = False
 ```
 
 -e ### ./models/sale_order.py
@@ -382,6 +688,7 @@ class SaleOrder(models.Model):
     requiere_visita = fields.Boolean(string='Requiere visita presencial')
     pickup_location = fields.Char(string='Ubicación de recolección')
 
+    # CAMPO QUE FALTABA - AÑADIDO
     expiration_date = fields.Date(
         string='Fecha de Expiración',
         default=lambda self: date(date.today().year, 12, 31)
@@ -393,7 +700,14 @@ class SaleOrder(models.Model):
         help='Si está marcado, al confirmar la orden NO se crearán ni procesarán albaranes de entrega.'
     )
 
-    # NUEVO CAMPO: Referencia a cotización anterior
+    # Campo booleano para controlar si siempre es servicio
+    always_service = fields.Boolean(
+        string='Siempre Servicios de Residuos',
+        default=True,
+        help='Cuando está marcado, las líneas se configuran por defecto para servicios de residuos'
+    )
+
+    # Referencia a cotización anterior
     related_quotation_id = fields.Many2one(
         'sale.order',
         string='Cotización Relacionada',
@@ -516,6 +830,7 @@ class SaleOrder(models.Model):
                 'default_company_size': self.company_size,
                 'default_industrial_sector': self.industrial_sector,
                 'default_prospect_priority': self.prospect_priority,
+                'default_always_service': True,
             }
         }
 
@@ -532,6 +847,7 @@ class SaleOrder(models.Model):
                 'residue_new': lead.residue_new,
                 'requiere_visita': lead.requiere_visita,
                 'pickup_location': lead.pickup_location,
+                'always_service': True,  # Siempre true cuando viene de CRM
                 # INFORMACIÓN BÁSICA DEL PROSPECTO
                 'company_size': lead.company_size,
                 'industrial_sector': lead.industrial_sector,
@@ -575,6 +891,10 @@ class SaleOrder(models.Model):
                         'product_uom': res.uom_id.id,
                         'residue_type': res.residue_type,
                         'plan_manejo': res.plan_manejo,
+                        'create_new_service': res.create_new_service,
+                        'residue_name': res.name,
+                        'residue_volume': res.volume,
+                        'residue_uom_id': res.uom_id.id,
                     }))
             
             if lines:
@@ -695,8 +1015,15 @@ class SaleOrder(models.Model):
 
       <!-- 1) Pestaña "Informe General" después de Líneas de la Orden -->
       <xpath expr="//notebook/page[@name='order_lines']" position="after">
-        <page string="Informe General" name="general_report">
+        
+        <!-- Nueva página: Gestión de Servicios -->
+        <page string="Gestión de Servicios" name="service_management">
           
+          <!-- Control global de servicios -->
+          <group string="Configuración de Servicios">
+            <field name="always_service"/>
+          </group>
+
           <!-- Información del Servicio -->
           <group string="Información del Servicio">
             <group>
@@ -720,6 +1047,10 @@ class SaleOrder(models.Model):
               <field name="estimated_business_potential" readonly="1"/>
             </group>
           </group>
+
+        </page>
+
+        <page string="Informe General" name="general_report">
 
           <!-- Información Operativa -->
           <group string="Información Operativa">
@@ -850,19 +1181,67 @@ class SaleOrder(models.Model):
         </group>
       </xpath>
 
-      <!-- 4) Tree: columnas después de product_template_id -->
-      <xpath expr="//page[@name='order_lines']//list/field[@name='product_template_id']" position="after">
-        <field name="plan_manejo"/>
-        <field name="residue_type"/>
+      <!-- 4) Tree: modificar columnas en las líneas -->
+      <xpath expr="//page[@name='order_lines']//list/field[@name='product_template_id']" position="replace">
+        
+        <!-- Campo de control para decidir crear o seleccionar -->
+        <field name="create_new_service" string="Crear Nuevo"/>
+        
+        <!-- Campo para seleccionar servicio existente -->
+        <field name="existing_service_id" 
+               string="Servicio Existente"
+               options="{'no_create': True}"/>
+        
+        <!-- Campos siempre editables para información del residuo -->
+        <field name="residue_name" string="Nombre Residuo"/>
+        <field name="residue_type" string="Tipo"/>
+        <field name="plan_manejo" string="Plan de Manejo"/>
+        
       </xpath>
 
-      <!-- 5) Form embebido: columnas después de product_id -->
+      <!-- 5) Agregar campos en el final de la lista -->
+      <xpath expr="//page[@name='order_lines']//list/field[@name='price_subtotal']" position="after">
+        <field name="product_id" invisible="1"/>
+      </xpath>
+
+      <!-- Agregar los nuevos campos después del product_id en la vista de formulario -->
       <xpath expr="//page[@name='order_lines']//form//field[@name='product_id']" position="after">
-        <field name="plan_manejo"/>
-        <field name="residue_type"/>
+        
+        <!-- Control de creación (siempre visible) -->
+        <group string="Configuración del Servicio">
+          <field name="create_new_service"/>
+        </group>
+        
+        <!-- Selección de servicio existente -->
+        <group string="Servicio Existente" invisible="create_new_service">
+          <field name="existing_service_id" 
+                 string="Servicio Existente"
+                 options="{'no_create': True}"
+                 placeholder="Buscar servicio existente..."/>
+          <separator string="Información extraída del servicio" colspan="2" invisible="not existing_service_id"/>
+          <field name="residue_name" string="Nombre" readonly="not create_new_service" invisible="not existing_service_id"/>
+          <field name="residue_type" string="Tipo de Residuo" readonly="not create_new_service" invisible="not existing_service_id"/>
+          <field name="plan_manejo" string="Plan de Manejo" readonly="not create_new_service" invisible="not existing_service_id"/>
+        </group>
+        
+        <!-- Campos para crear nuevo servicio -->
+        <group string="Crear Nuevo Servicio" invisible="not create_new_service">
+          <field name="residue_name"/>
+          <field name="residue_type"/>
+          <field name="plan_manejo"/>
+          <field name="residue_volume"/>
+          <field name="residue_uom_id"/>
+        </group>
+        
+        <!-- Información común - SIEMPRE EDITABLE -->
+        <group string="Información del Residuo">
+          <field name="residue_volume" invisible="create_new_service"/>
+          <field name="residue_uom_id" invisible="create_new_service"/>
+        </group>
+        
       </xpath>
 
-      <!-- 6) Agregar botón en el header (arriba a la derecha) -->
+      <!-- 7) Agregar botón en el header (arriba a la derecha) -->
       <xpath expr="//header" position="inside">
         <button type="object" 
                 name="action_create_related_quotation" 

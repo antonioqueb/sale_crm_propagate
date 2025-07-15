@@ -9,6 +9,7 @@ class SaleOrder(models.Model):
     requiere_visita = fields.Boolean(string='Requiere visita presencial')
     pickup_location = fields.Char(string='Ubicación de recolección')
 
+    # CAMPO QUE FALTABA - AÑADIDO
     expiration_date = fields.Date(
         string='Fecha de Expiración',
         default=lambda self: date(date.today().year, 12, 31)
@@ -20,14 +21,14 @@ class SaleOrder(models.Model):
         help='Si está marcado, al confirmar la orden NO se crearán ni procesarán albaranes de entrega.'
     )
 
-    # NUEVO: Campo booleano para controlar si siempre es servicio
+    # Campo booleano para controlar si siempre es servicio
     always_service = fields.Boolean(
         string='Siempre Servicios de Residuos',
         default=True,
         help='Cuando está marcado, las líneas se configuran por defecto para servicios de residuos'
     )
 
-    # NUEVO CAMPO: Referencia a cotización anterior
+    # Referencia a cotización anterior
     related_quotation_id = fields.Many2one(
         'sale.order',
         string='Cotización Relacionada',

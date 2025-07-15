@@ -177,28 +177,18 @@
       <!-- 4) Tree: modificar columnas en las líneas -->
       <xpath expr="//page[@name='order_lines']//list/field[@name='product_template_id']" position="replace">
         
-        <!-- Mostrar campo de control -->
-        <field name="create_new_service" string="Crear Nuevo" invisible="not parent.always_service"/>
+        <!-- Campo de control para decidir crear o seleccionar -->
+        <field name="create_new_service" string="Crear Nuevo"/>
         
-        <!-- Campo para servicio existente -->
-        <field name="product_template_id" 
+        <!-- Campo para seleccionar servicio existente -->
+        <field name="existing_service_id" 
                string="Servicio Existente"
-               invisible="create_new_service and parent.always_service" 
-               context="{'partner_id': parent.partner_id, 'quantity': product_uom_qty, 'pricelist': parent.pricelist_id, 'uom':product_uom, 'company_id': parent.company_id}" 
-               force_save="1" 
-               options="{'no_open': True}" 
-               domain="[('sale_ok', '=', True), '|', ('company_id', '=', False), ('company_id', '=', parent.company_id)]"/>
+               options="{'no_create': True}"/>
         
-        <!-- Campos para crear nuevo servicio -->
-        <field name="residue_name" 
-               string="Nombre Residuo" 
-               invisible="not create_new_service or not parent.always_service"/>
-        <field name="residue_type" 
-               string="Tipo" 
-               invisible="not create_new_service or not parent.always_service"/>
-        <field name="plan_manejo" 
-               string="Plan de Manejo" 
-               invisible="not create_new_service or not parent.always_service"/>
+        <!-- Campos siempre editables para información del residuo -->
+        <field name="residue_name" string="Nombre Residuo"/>
+        <field name="residue_type" string="Tipo"/>
+        <field name="plan_manejo" string="Plan de Manejo"/>
         
       </xpath>
 
@@ -207,27 +197,39 @@
         <field name="product_id" invisible="1"/>
       </xpath>
 
-      <!-- 6) Form embebido: modificar campos de las líneas -->
-      <xpath expr="//page[@name='order_lines']//form//field[@name='product_id']" position="replace">
+      <!-- Agregar los nuevos campos después del product_id en la vista de formulario -->
+      <xpath expr="//page[@name='order_lines']//form//field[@name='product_id']" position="after">
         
-        <!-- Control de creación -->
-        <field name="create_new_service" invisible="not parent.always_service"/>
+        <!-- Control de creación (siempre visible) -->
+        <group string="Configuración del Servicio">
+          <field name="create_new_service"/>
+        </group>
         
-        <!-- Campo producto para servicio existente -->
-        <field name="product_id" 
-               string="Servicio Existente"
-               invisible="create_new_service and parent.always_service"
-               context="{'partner_id': parent.partner_id, 'quantity': product_uom_qty, 'pricelist': parent.pricelist_id, 'uom':product_uom, 'company_id': parent.company_id}" 
-               force_save="1" 
-               domain="[('sale_ok', '=', True), '|', ('company_id', '=', False), ('company_id', '=', parent.company_id)]"/>
+        <!-- Selección de servicio existente -->
+        <group string="Servicio Existente" invisible="create_new_service">
+          <field name="existing_service_id" 
+                 string="Servicio Existente"
+                 options="{'no_create': True}"
+                 placeholder="Buscar servicio existente..."/>
+          <separator string="Información extraída del servicio" colspan="2" invisible="not existing_service_id"/>
+          <field name="residue_name" string="Nombre" readonly="not create_new_service" invisible="not existing_service_id"/>
+          <field name="residue_type" string="Tipo de Residuo" readonly="not create_new_service" invisible="not existing_service_id"/>
+          <field name="plan_manejo" string="Plan de Manejo" readonly="not create_new_service" invisible="not existing_service_id"/>
+        </group>
         
         <!-- Campos para crear nuevo servicio -->
-        <group string="Crear Nuevo Servicio" invisible="not create_new_service or not parent.always_service">
+        <group string="Crear Nuevo Servicio" invisible="not create_new_service">
           <field name="residue_name"/>
           <field name="residue_type"/>
           <field name="plan_manejo"/>
           <field name="residue_volume"/>
           <field name="residue_uom_id"/>
+        </group>
+        
+        <!-- Información común - SIEMPRE EDITABLE -->
+        <group string="Información del Residuo">
+          <field name="residue_volume" invisible="create_new_service"/>
+          <field name="residue_uom_id" invisible="create_new_service"/>
         </group>
         
       </xpath>
