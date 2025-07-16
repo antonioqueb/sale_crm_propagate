@@ -34,7 +34,7 @@ class SaleOrderLine(models.Model):
     existing_service_id = fields.Many2one(
         'product.product',
         string="Seleccionar Servicio Existente",
-        domain="[('type', '=', 'service'), ('categ_id.name', 'ilike', 'servicios de residuos')]",
+        domain="[('type', '=', 'service')]",
         help="Selecciona un servicio existente en lugar de crear uno nuevo"
     )
 
