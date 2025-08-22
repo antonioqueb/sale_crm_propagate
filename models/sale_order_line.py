@@ -159,7 +159,7 @@ class SaleOrderLine(models.Model):
         plan_manejo_label = dict(self._fields['plan_manejo'].selection).get(self.plan_manejo, '')
         residue_type_label = dict(self._fields['residue_type'].selection).get(self.residue_type, '')
         
-        service_name = f"Servicio Recolección de {self.residue_name}"
+        service_name = f"{self.residue_name}"
         
         service = self.env['product.product'].create({
             'name': service_name,
