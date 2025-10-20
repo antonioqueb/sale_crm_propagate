@@ -40,9 +40,12 @@ class SaleOrderLine(models.Model):
 
     # Campos para crear servicios directamente en las líneas
     residue_name = fields.Char(string="Nombre del Residuo")
-    residue_volume = fields.Float(string="Unidades", default=1.0)  # MODIFICADO: ahora es "Unidades"
+    residue_volume = fields.Float(string="Unidades", default=1.0)
     
-    # NUEVO CAMPO PARA PESO
+    # NUEVO CAMPO: Capacidad
+    residue_capacity = fields.Char(string='Capacidad', help='Capacidad del contenedor (ej: 100 L, 200 Lis, 50 CM³)')
+    
+    # CAMPO PARA PESO
     residue_weight_kg = fields.Float(
         string="Peso Total (kg)",
         help="Peso total del residuo en kilogramos para sistema de acopio."
@@ -56,7 +59,18 @@ class SaleOrderLine(models.Model):
         help="Peso promedio por unidad (kg/unidad)"
     )
     
-    residue_uom_id = fields.Many2one('uom.uom', string="Unidad de Medida")
+    residue_uom_id = fields.Many2one(
+        'uom.uom', 
+        string="Unidad de Medida",
+        default=lambda self: self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
+    )
+    
+    # NUEVO CAMPO: Embalaje para residuos
+    residue_packaging_id = fields.Many2one(
+        'product.packaging',
+        string="Embalaje del Residuo",
+        help="Tipo de embalaje utilizado para el residuo"
+    )
 
     @api.depends('residue_volume', 'residue_weight_kg')
     def _compute_weight_per_unit(self):
@@ -69,16 +83,17 @@ class SaleOrderLine(models.Model):
 
     @api.onchange('create_new_service')
     def _onchange_create_new_service_line(self):
-        """Limpiar campos según la opción seleccionada"""
+        """Limpiar campos según la opción seleccionada y establecer UoM"""
         if self.create_new_service:
             # Si cambia a crear nuevo servicio, limpiar servicio existente
             self.existing_service_id = False
             self.product_id = False
             self.product_template_id = False
-            # Mantener otros campos para que el usuario pueda editarlos
+            # Establecer UoM a "Unidades" por defecto
+            if not self.residue_uom_id:
+                self.residue_uom_id = self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
+                self.product_uom = self.residue_uom_id
         else:
-            # Si cambia a usar servicio existente, NO limpiar campos inmediatamente
-            # Los campos se actualizarán cuando seleccione un servicio
             pass
 
     @api.onchange('existing_service_id')
@@ -90,17 +105,30 @@ class SaleOrderLine(models.Model):
             self.product_template_id = service.product_tmpl_id.id
             self.name = service.name
             
+            # Establecer UoM a "Unidades" siempre
+            uom_unit = self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
+            if uom_unit:
+                self.residue_uom_id = uom_unit
+                self.product_uom = uom_unit
+            
             # Intentar extraer información del código del producto o descripción
             if service.default_code:
-                # Ejemplo: SRV-RSU-123 -> extraer RSU
                 parts = service.default_code.split('-')
                 if len(parts) >= 2:
                     residue_type_map = {'RSU': 'rsu', 'RME': 'rme', 'RP': 'rp'}
                     if parts[1] in residue_type_map:
                         self.residue_type = residue_type_map[parts[1]]
             
+            # Intentar extraer capacidad de la descripción
+            description = (service.description_sale or '').lower()
+            if 'capacidad:' in description:
+                try:
+                    capacity_text = description.split('capacidad:')[1].split('l')[0].strip()
+                    self.residue_capacity = float(capacity_text)
+                except:
+                    pass
+            
             # Intentar extraer plan de manejo de la descripción o nombre
-            description = (service.description_sale or service.name or '').lower()
             plan_map = {
                 'reciclaje': 'reciclaje',
                 'co-procesamiento': 'coprocesamiento', 
@@ -127,7 +155,6 @@ class SaleOrderLine(models.Model):
             
             # Extraer nombre del residuo del nombre del servicio
             if 'Servicio Recolección de' in service.name.lower():
-                # Extraer el nombre del residuo del nombre del servicio
                 parts = service.name.split(' - ')
                 if len(parts) > 0:
                     residue_part = parts[0].replace('Servicio Recolección de ', '')
@@ -139,6 +166,18 @@ class SaleOrderLine(models.Model):
         if (self.create_new_service and self.residue_name and 
             self.plan_manejo and self.residue_type and not self.product_id):
             self._create_service_from_line_data()
+    
+    @api.onchange('residue_packaging_id')
+    def _onchange_residue_packaging(self):
+        """Sincronizar el embalaje del residuo con el embalaje del producto"""
+        if self.residue_packaging_id:
+            self.product_packaging_id = self.residue_packaging_id
+    
+    @api.onchange('residue_uom_id')
+    def _onchange_residue_uom(self):
+        """Sincronizar UoM del residuo con UoM del producto"""
+        if self.residue_uom_id:
+            self.product_uom = self.residue_uom_id
 
     def _create_service_from_line_data(self):
         """Crear un servicio basado en los datos de la línea"""
@@ -170,8 +209,10 @@ class SaleOrderLine(models.Model):
             'description_sale': f"""Servicio de manejo de residuo: {self.residue_name}
 Plan de manejo: {plan_manejo_label}
 Tipo de residuo: {residue_type_label}
+Capacidad: {self.residue_capacity}
 Peso estimado: {self.residue_weight_kg} kg
-Unidades: {self.residue_volume} {self.residue_uom_id.name if self.residue_uom_id else ''}""",
+Unidades: {self.residue_volume} {self.residue_uom_id.name if self.residue_uom_id else ''}
+Embalaje: {self.residue_packaging_id.name if self.residue_packaging_id else 'No especificado'}""",
             'default_code': f"SRV-{self.residue_type.upper()}-{self.id or 'NEW'}",
         })
 
@@ -181,15 +222,35 @@ Unidades: {self.residue_volume} {self.residue_uom_id.name if self.residue_uom_id
         self.name = service.name
         if self.residue_volume:
             self.product_uom_qty = self.residue_volume
-        if self.residue_uom_id:
-            self.product_uom = self.residue_uom_id.id
+        
+        # Establecer UoM a "Unidades" siempre
+        uom_unit = self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
+        if uom_unit:
+            if not self.residue_uom_id:
+                self.residue_uom_id = uom_unit
+            self.product_uom = uom_unit
+        
+        if self.residue_packaging_id:
+            self.product_packaging_id = self.residue_packaging_id
 
     @api.onchange('order_id.always_service')
     def _onchange_order_always_service(self):
         """Cuando cambia el campo always_service de la orden, ajustar el comportamiento"""
         if hasattr(self.order_id, 'always_service') and self.order_id.always_service:
-            # Si la orden siempre es de servicios, permitir ambas opciones
             pass
         else:
-            # Si no es específicamente de servicios, permitir selección normal
             self.create_new_service = False
+    
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Establecer UoM por defecto al crear líneas"""
+        uom_unit = self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
+        for vals in vals_list:
+            # Establecer residue_uom_id si no está presente
+            if not vals.get('residue_uom_id') and uom_unit:
+                vals['residue_uom_id'] = uom_unit.id
+            # Establecer product_uom si no está presente
+            if not vals.get('product_uom') and uom_unit:
+                vals['product_uom'] = uom_unit.id
+        
+        return super().create(vals_list)

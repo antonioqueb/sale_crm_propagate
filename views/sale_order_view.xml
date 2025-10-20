@@ -174,7 +174,7 @@
         </group>
       </xpath>
 
-      <!-- 4) Tree: modificar columnas en las líneas - AGREGANDO CAMPOS DE PESO -->
+      <!-- 4) Tree: modificar columnas en las líneas - AGREGANDO CAPACIDAD -->
       <xpath expr="//page[@name='order_lines']//list/field[@name='product_template_id']" position="replace">
         
         <!-- Campo de control para decidir crear o seleccionar -->
@@ -187,13 +187,22 @@
         
         <!-- Campos siempre editables para información del residuo -->
         <field name="residue_name" string="Nombre Residuo"/>
-        <field name="residue_type" string="Tipo"/>
-        <field name="plan_manejo" string="Plan de Manejo"/>
+        <field name="residue_type" string="Tipo" optional="show"/>
+        <field name="plan_manejo" string="Plan de Manejo" optional="show"/>
         
-        <!-- NUEVOS CAMPOS DE PESO Y UNIDADES -->
+        <!-- NUEVO: Campo de capacidad -->
+        <field name="residue_capacity" string="Capacidad"/>
+        
+        <!-- CAMPOS DE PESO Y UNIDADES -->
         <field name="residue_weight_kg" string="Peso Total (kg)"/>
         <field name="residue_volume" string="Unidades"/>
         <field name="weight_per_unit" string="Kg/Unidad" readonly="1"/>
+        
+        <!-- Campo de embalaje -->
+        <field name="residue_packaging_id" string="Embalaje"/>
+        
+        <!-- Campo de UoM (siempre debe mostrar "Unidades") -->
+        <field name="residue_uom_id" string="UoM" readonly="1"/>
         
       </xpath>
 
@@ -229,12 +238,14 @@
           <field name="plan_manejo"/>
         </group>
         
-        <!-- Información de cantidades y peso - SIEMPRE EDITABLE Y ACTUALIZADA -->
-        <group string="Cantidades y Peso">
+        <!-- Información de cantidades, capacidad, peso y embalaje - SIEMPRE EDITABLE -->
+        <group string="Cantidades, Capacidad, Peso y Embalaje">
+          <field name="residue_capacity" string="Capacidad" placeholder="Ejemplo: 200"/>
           <field name="residue_weight_kg" string="Peso Total (kg)" placeholder="Ejemplo: 200"/>
           <field name="residue_volume" string="Número de Unidades" placeholder="Ejemplo: 1"/>
           <field name="weight_per_unit" string="Kg por Unidad" readonly="1"/>
-          <field name="residue_uom_id"/>
+          <field name="residue_uom_id" readonly="1"/>
+          <field name="residue_packaging_id" string="Embalaje"/>
         </group>
         
       </xpath>

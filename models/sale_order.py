@@ -201,7 +201,7 @@ class SaleOrder(models.Model):
                 'conversation_notes': lead.conversation_notes,
             })
             
-            # Crear líneas solo con servicios creados - INCLUYENDO DATOS DE PESO
+            # Crear líneas solo con servicios creados - INCLUYENDO CAPACIDAD
             lines = []
             for res in lead.residue_line_ids:
                 if hasattr(res, 'product_id') and res.product_id:
@@ -209,15 +209,18 @@ class SaleOrder(models.Model):
                         'product_id': res.product_id.id,
                         'name': res.product_id.name,
                         'product_uom_qty': res.volume,
-                        'product_uom': res.uom_id.id,
+                        'product_uom': res.uom_id.id if res.uom_id else False,
+                        'product_packaging_id': res.packaging_id.id if res.packaging_id else False,
                         'residue_type': res.residue_type,
                         'plan_manejo': res.plan_manejo,
                         'create_new_service': res.create_new_service,
                         'residue_name': res.name,
                         'residue_volume': res.volume,
-                        'residue_weight_kg': res.weight_kg,  # NUEVO CAMPO
-                        'weight_per_unit': res.weight_per_unit,  # NUEVO CAMPO
-                        'residue_uom_id': res.uom_id.id,
+                        'residue_capacity': res.capacity,  # NUEVO: Capacidad
+                        'residue_weight_kg': res.weight_kg,
+                        'weight_per_unit': res.weight_per_unit,
+                        'residue_uom_id': res.uom_id.id if res.uom_id else False,
+                        'residue_packaging_id': res.packaging_id.id if res.packaging_id else False,
                     }))
             
             if lines:
