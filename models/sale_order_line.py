@@ -65,11 +65,14 @@ class SaleOrderLine(models.Model):
         default=lambda self: self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
     )
     
-    # NUEVO CAMPO: Embalaje para residuos
+    # -------------------------------------------------------------------------
+    # CORRECCIÓN ODOO 19:
+    # product.packaging fue eliminado. Usamos uom.uom para los empaques.
+    # -------------------------------------------------------------------------
     residue_packaging_id = fields.Many2one(
-        'product.packaging',
+        'uom.uom',
         string="Embalaje del Residuo",
-        help="Tipo de embalaje utilizado para el residuo"
+        help="Tipo de embalaje utilizado para el residuo (Gestionado como UoM en Odoo 19)"
     )
 
     @api.depends('residue_volume', 'residue_weight_kg')
@@ -171,6 +174,7 @@ class SaleOrderLine(models.Model):
     def _onchange_residue_packaging(self):
         """Sincronizar el embalaje del residuo con el embalaje del producto"""
         if self.residue_packaging_id:
+            # En Odoo 19, product_packaging_id en sale.order.line también apunta a uom.uom
             self.product_packaging_id = self.residue_packaging_id
     
     @api.onchange('residue_uom_id')
@@ -231,6 +235,7 @@ Embalaje: {self.residue_packaging_id.name if self.residue_packaging_id else 'No 
             self.product_uom = uom_unit
         
         if self.residue_packaging_id:
+            # En Odoo 19 esto es válido porque ambos son uom.uom
             self.product_packaging_id = self.residue_packaging_id
 
     @api.onchange('order_id.always_service')
