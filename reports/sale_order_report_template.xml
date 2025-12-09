@@ -65,13 +65,16 @@
             </div>
         </xpath>
         
-        <!-- Modificar el encabezado de la columna Quantity para mostrar "Cantidad" -->
+        <!-- Modificar el encabezado de la columna Quantity -->
+        <!-- Nota: Si th_quantity falla también, cámbialo por xpath expr="//th/span[contains(text(), 'Quantity')]/.." -->
         <xpath expr="//th[@name='th_quantity']" position="replace">
             <th name="th_quantity" class="text-end text-nowrap">Cantidad</th>
         </xpath>
         
-        <!-- Modificar el contenido de la celda de cantidad para mostrar cantidad + embalaje solamente -->
-        <xpath expr="//td[@name='td_quantity']" position="replace">
+        <!-- CORRECCIÓN AQUÍ: -->
+        <!-- En lugar de buscar por id (td[@name='td_quantity']), buscamos por el CONTENIDO (el span de la cantidad) y subimos al padre (..) -->
+        <!-- Esto es más robusto en Odoo 19 donde los nombres de las celdas td pueden desaparecer -->
+        <xpath expr="//span[@t-field='line.product_uom_qty']/.." position="replace">
             <td name="td_quantity" class="text-end text-nowrap">
                 <span t-field="line.product_uom_qty">3</span>
                 <span t-if="line.product_packaging_id" t-field="line.product_packaging_id.name">TOTE</span>
@@ -79,10 +82,8 @@
             </td>
         </xpath>
         
-        <!-- OCULTAR campos sensibles en las líneas del reporte (plan_manejo y residue_type) -->
-        <!-- Estos campos NO deben aparecer en el reporte impreso para el cliente -->
+        <!-- OCULTAR campos sensibles en las líneas del reporte -->
         <xpath expr="//td[@name='td_name']//span[@t-field='line.name']" position="after">
-            <!-- Asegurarnos que no se muestren campos internos en la descripción -->
             <t t-set="hide_internal_fields" t-value="True"/>
         </xpath>
         
