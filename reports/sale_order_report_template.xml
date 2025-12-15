@@ -57,11 +57,11 @@
                     </div>
 
                     <!-- Agregar imagen de flota de vehículos -->
-                    <div class="row mb-5" style="text-align: center;">
+                    <div class="row mb-5 mt-4 " style="text-align: center;">
                         <div class="col-12 mb-5">
                             <img src="/sale_crm_propagate/static/description/frontal.png"
                                  alt="Flota de vehículos especializados"
-                                 style="max-width: 100%; height: auto; max-height: 420px;"/>
+                                 style="max-width: 100%; height: auto; margin-bottom: 30px; max-height: 420px;"/>
                         </div>
                     </div>
                 </div>
