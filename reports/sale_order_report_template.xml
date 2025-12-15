@@ -2,7 +2,18 @@
 <odoo>
     <!-- Heredar y extender el template del reporte de orden de venta -->
     <template id="report_saleorder_document_custom" inherit_id="sale.report_saleorder_document">
-        
+
+        <!-- OCULTAR el bloque superior de dirección que imprime web.external_layout -->
+        <!-- Esto quita: "ALMERFAA FOR MEDIA ADVERTISING / Riyadh / Arabia Saudita" arriba del título -->
+        <xpath expr="//t[@t-set='address']" position="replace">
+            <t t-set="address" t-value="''"/>
+        </xpath>
+
+        <!-- OCULTAR bloque estándar de direcciones (facturación / envío) dentro del body -->
+        <xpath expr="//t[@t-set='information_block']" position="replace">
+            <t/>
+        </xpath>
+
         <!-- Cambiar el título del documento -->
         <xpath expr="//t[@t-set='layout_document_title']" position="replace">
             <t t-set="layout_document_title">
@@ -10,49 +21,53 @@
                 <span t-field="doc.name" style="font-size: 23px; font-weight: 700;">SO0000</span>
             </t>
         </xpath>
-        
+
         <!-- Agregar descripción personalizada antes de la tabla de líneas -->
         <xpath expr="//div[@class='oe_structure'][2]" position="after">
             <div class="row mt-4 mb-3" style="font-size: 13px; line-height: 1.2;">
                 <div class="col-12">
-                    <h4 style="font-size: 14px; line-height: 1.2; margin-bottom: 8px;">Servicio de transporte y disposición de residuos para: <span t-field="doc.partner_id.name" style="font-weight: 700;">DIFRENOSA</span></h4>
+                    <h4 style="font-size: 14px; line-height: 1.2; margin-bottom: 8px;">
+                        Servicio de transporte y disposición de residuos para:
+                        <span t-field="doc.partner_id.name" style="font-weight: 700;">DIFRENOSA</span>
+                    </h4>
                     <p class="text-muted" style="font-size: 12px; line-height: 1.2; margin-bottom: 10px;">Según normatividad aplicable</p>
-                    
+
                     <h5 class="mt-3" style="font-size: 13px; line-height: 1.2; margin-bottom: 8px;">Propuesta Técnica y Económica de Servicios</h5>
-                    
+
                     <h6 class="mt-3" style="font-size: 12px; line-height: 1.2; margin-bottom: 8px;">1.0 ANTECEDENTES</h6>
                     <p style="font-size: 12px; line-height: 1.2; margin-bottom: 10px;">
-                        Servicios Ambientales Internacionales, S. de R.L. (SAI) ofrece a <strong><span t-field="doc.partner_id.name">DIFRENOSA</span></strong> 
-                        sus servicios autorizados de transporte y disposición de residuos. Asimismo, SAI tiene información clara de las 
-                        especificaciones del cliente necesarias para poder adjudicar y realizar el servicio en forma satisfactoria. SAI 
+                        Servicios Ambientales Internacionales, S. de R.L. (SAI) ofrece a
+                        <strong><span t-field="doc.partner_id.name">DIFRENOSA</span></strong>
+                        sus servicios autorizados de transporte y disposición de residuos. Asimismo, SAI tiene información clara de las
+                        especificaciones del cliente necesarias para poder adjudicar y realizar el servicio en forma satisfactoria. SAI
                         tiene el entendimiento siguiente sobre este proyecto:
                     </p>
-                    
+
                     <div style="margin-left: 20px; font-size: 12px; line-height: 1.2;">
-                        <p style="margin-bottom: 5px;"><strong>a)</strong> El traslado deberá realizarse en vehículos y operadores autorizados y con los plaques 
+                        <p style="margin-bottom: 5px;"><strong>a)</strong> El traslado deberá realizarse en vehículos y operadores autorizados y con los plaques
                         correspondientes según normas aplicables.</p>
-                        
-                        <p style="margin-bottom: 5px;"><strong>b)</strong> SAI deberá contar con el personal capacitado y el equipo de protección personal necesario para el 
+
+                        <p style="margin-bottom: 5px;"><strong>b)</strong> SAI deberá contar con el personal capacitado y el equipo de protección personal necesario para el
                         manejo del residuo.</p>
-                        
+
                         <p style="margin-bottom: 5px;"><strong>c)</strong> SAI podrá proporcionar la documentación para llevar a cabo el embarque.</p>
-                        
-                        <p style="margin-bottom: 5px;"><strong>d)</strong> SAI declara que cuenta con autorizaciones necesarias de competencia federal y estatal para realizar los 
+
+                        <p style="margin-bottom: 5px;"><strong>d)</strong> SAI declara que cuenta con autorizaciones necesarias de competencia federal y estatal para realizar los
                         servicios.</p>
                     </div>
-                    
+
                     <!-- Agregar imagen de flota de vehículos -->
-                    <div class="row mt-3 mb-8" style="text-align: center;">
+                    <div class="row mb-24" style="text-align: center;">
                         <div class="col-12">
-                            <img src="/sale_crm_propagate/static/description/frontal.jpg" 
-                                 alt="Flota de vehículos especializados" 
-                                 style="max-width: 100%; height: auto; max-height: 440px; border: 1px solid #ddd; border-radius: 5px;"/>
+                            <img src="/sale_crm_propagate/static/description/frontal.png"
+                                 alt="Flota de vehículos especializados"
+                                 style="max-width: 100%; height: auto; max-height: 360px;"/>
                         </div>
                     </div>
                 </div>
             </div>
         </xpath>
-        
+
         <!-- Agregar información del servicio después de la información de fechas -->
         <xpath expr="//div[@id='informations']" position="after">
             <div class="row mt-3">
@@ -60,32 +75,30 @@
                     <strong>Frecuencia del Servicio:</strong> <span t-field="doc.service_frequency"/>
                 </div>
                 <div class="col-4" t-if="doc.pickup_location">
-                    <strong>Ubicación de recolección:</strong> <span t-field="doc.pickup_location"/>
+                    <strong>Ubicación de recolección:</strong>
+                    <span t-esc="(doc.pickup_location or '').replace('\n', ', ')"/>
                 </div>
             </div>
         </xpath>
-        
+
         <!-- Modificar el encabezado de la columna Quantity -->
-        <!-- Nota: Si th_quantity falla también, cámbialo por xpath expr="//th/span[contains(text(), 'Quantity')]/.." -->
         <xpath expr="//th[@name='th_quantity']" position="replace">
             <th name="th_quantity" class="text-end text-nowrap">Cantidad</th>
         </xpath>
-        
-        <!-- CORRECCIÓN AQUÍ: -->
-        <!-- En lugar de buscar por id (td[@name='td_quantity']), buscamos por el CONTENIDO (el span de la cantidad) y subimos al padre (..) -->
-        <!-- Esto es más robusto en Odoo 19 donde los nombres de las celdas td pueden desaparecer -->
-        <xpath expr="//span[@t-field='line.product_uom_qty']/.." position="replace">
-            <td name="td_quantity" class="text-end text-nowrap">
+
+        <!-- Modificar el contenido de la celda de cantidad (sin product_packaging_id) -->
+        <xpath expr="//td[@name='td_product_quantity']" position="replace">
+            <td name="td_product_quantity" class="o_td_quantity text-end text-nowrap">
                 <span t-field="line.product_uom_qty">3</span>
-                <span t-if="line.product_packaging_id" t-field="line.product_packaging_id.name">TOTE</span>
-                <span t-else="" t-field="line.product_uom.name">units</span>
+                <span t-if="line.residue_packaging_id" t-field="line.residue_packaging_id.name">TOTE</span>
+                <span t-else="" t-field="line.product_uom_id">units</span>
             </td>
         </xpath>
-        
+
         <!-- OCULTAR campos sensibles en las líneas del reporte -->
-        <xpath expr="//td[@name='td_name']//span[@t-field='line.name']" position="after">
+        <xpath expr="//span[@t-field='line.name']" position="after">
             <t t-set="hide_internal_fields" t-value="True"/>
         </xpath>
-        
+
     </template>
 </odoo>

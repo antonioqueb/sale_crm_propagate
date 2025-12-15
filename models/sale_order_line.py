@@ -1,261 +1,303 @@
-from odoo import models, fields, api
+from odoo import models, fields, api, _
+from odoo.exceptions import ValidationError
+import logging
+
+_logger = logging.getLogger(__name__)
 
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
-    residue_type = fields.Selection(
-        [('rsu', 'RSU'), ('rme', 'RME'), ('rp', 'RP')],
-        string='Tipo de manejo'
-    )
-    
-    plan_manejo = fields.Selection(
-        selection=[
-            ('reciclaje', 'Reciclaje'),
-            ('coprocesamiento', 'Co-procesamiento'),
-            ('tratamiento_fisicoquimico', 'Tratamiento Físico-Químico'),
-            ('tratamiento_biologico', 'Tratamiento Biológico'),
-            ('tratamiento_termico', 'Tratamiento Térmico (Incineración)'),
-            ('confinamiento_controlado', 'Confinamiento Controlado'),
-            ('reutilizacion', 'Reutilización'),
-            ('destruccion_fiscal', 'Destrucción Fiscal'),
-        ],
-        string="Plan de Manejo",
-        help="Método de tratamiento y/o disposición final para el residuo según normatividad ambiental."
-    )
-
-    # Campo para controlar el modo de selección
-    create_new_service = fields.Boolean(
-        string="Crear Nuevo Servicio",
-        default=False,  # Por defecto permitir seleccionar servicios existentes
-        help="Marca para crear un nuevo servicio, desmarca para seleccionar uno existente"
-    )
-
-    # Campo para seleccionar servicio existente (similar al CRM)
-    existing_service_id = fields.Many2one(
-        'product.product',
-        string="Seleccionar Servicio Existente",
-        domain="[('type', '=', 'service')]",
-        help="Selecciona un servicio existente en lugar de crear uno nuevo"
-    )
-
-    # Campos para crear servicios directamente en las líneas
-    residue_name = fields.Char(string="Nombre del Residuo")
-    residue_volume = fields.Float(string="Unidades", default=1.0)
-    
-    # NUEVO CAMPO: Capacidad
-    residue_capacity = fields.Char(string='Capacidad', help='Capacidad del contenedor (ej: 100 L, 200 Lis, 50 CM³)')
-    
-    # CAMPO PARA PESO
-    residue_weight_kg = fields.Float(
-        string="Peso Total (kg)",
-        help="Peso total del residuo en kilogramos para sistema de acopio."
-    )
-    
-    # CAMPO COMPUTADO PARA MOSTRAR CONVERSIÓN
-    weight_per_unit = fields.Float(
-        string="Kg por Unidad",
-        compute="_compute_weight_per_unit",
-        store=True,
-        help="Peso promedio por unidad (kg/unidad)"
-    )
-    
-    residue_uom_id = fields.Many2one(
-        'uom.uom', 
-        string="Unidad de Medida",
-        default=lambda self: self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
-    )
-    
     # -------------------------------------------------------------------------
-    # CORRECCIÓN ODOO 19:
-    # product.packaging fue eliminado. Usamos uom.uom para los empaques.
+    # HELPERS
     # -------------------------------------------------------------------------
-    residue_packaging_id = fields.Many2one(
-        'uom.uom',
-        string="Embalaje del Residuo",
-        help="Tipo de embalaje utilizado para el residuo (Gestionado como UoM en Odoo 19)"
-    )
+    def _get_or_create_service_uom(self):
+        """Busca o crea la UoM 'Unidad de servicio'."""
+        UoM = self.env['uom.uom'].sudo()
+        unit = self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
 
-    @api.depends('residue_volume', 'residue_weight_kg')
-    def _compute_weight_per_unit(self):
-        """Calcular peso promedio por unidad"""
-        for record in self:
-            if record.residue_volume and record.residue_volume > 0:
-                record.weight_per_unit = record.residue_weight_kg / record.residue_volume
-            else:
-                record.weight_per_unit = 0.0
+        # 1) Buscar existente
+        service_uom = UoM.search([('name', '=ilike', 'Unidad de servicio')], limit=1)
+        if not service_uom:
+            service_uom = UoM.search([('name', 'ilike', 'Unidad de servicio')], limit=1)
+        if service_uom:
+            return service_uom
 
-    @api.onchange('create_new_service')
-    def _onchange_create_new_service_line(self):
-        """Limpiar campos según la opción seleccionada y establecer UoM"""
-        if self.create_new_service:
-            # Si cambia a crear nuevo servicio, limpiar servicio existente
-            self.existing_service_id = False
-            self.product_id = False
-            self.product_template_id = False
-            # Establecer UoM a "Unidades" por defecto
-            if not self.residue_uom_id:
-                self.residue_uom_id = self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
-                self.product_uom = self.residue_uom_id
-        else:
-            pass
+        # 2) Crear por copia de "Unidades"
+        if not unit:
+            return False
 
-    @api.onchange('existing_service_id')
-    def _onchange_existing_service_id(self):
-        """Asignar servicio existente seleccionado"""
-        if self.existing_service_id and not self.create_new_service:
-            service = self.existing_service_id
-            self.product_id = service.id
-            self.product_template_id = service.product_tmpl_id.id
-            self.name = service.name
-            
-            # Establecer UoM a "Unidades" siempre
-            uom_unit = self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
-            if uom_unit:
-                self.residue_uom_id = uom_unit
-                self.product_uom = uom_unit
-            
-            # Intentar extraer información del código del producto o descripción
-            if service.default_code:
-                parts = service.default_code.split('-')
-                if len(parts) >= 2:
-                    residue_type_map = {'RSU': 'rsu', 'RME': 'rme', 'RP': 'rp'}
-                    if parts[1] in residue_type_map:
-                        self.residue_type = residue_type_map[parts[1]]
-            
-            # Intentar extraer capacidad de la descripción
-            description = (service.description_sale or '').lower()
-            if 'capacidad:' in description:
-                try:
-                    capacity_text = description.split('capacidad:')[1].split('l')[0].strip()
-                    self.residue_capacity = float(capacity_text)
-                except:
-                    pass
-            
-            # Intentar extraer plan de manejo de la descripción o nombre
-            plan_map = {
-                'reciclaje': 'reciclaje',
-                'co-procesamiento': 'coprocesamiento', 
-                'coprocesamiento': 'coprocesamiento',
-                'físico-químico': 'tratamiento_fisicoquimico',
-                'fisicoquimico': 'tratamiento_fisicoquimico',
-                'biológico': 'tratamiento_biologico',
-                'biologico': 'tratamiento_biologico',
-                'térmico': 'tratamiento_termico',
-                'termico': 'tratamiento_termico',
-                'incineración': 'tratamiento_termico',
-                'incineracion': 'tratamiento_termico',
-                'confinamiento': 'confinamiento_controlado',
-                'reutilización': 'reutilizacion',
-                'reutilizacion': 'reutilizacion',
-                'destrucción': 'destruccion_fiscal',
-                'destruccion': 'destruccion_fiscal',
-            }
-            
-            for key, value in plan_map.items():
-                if key in description:
-                    self.plan_manejo = value
-                    break
-            
-            # Extraer nombre del residuo del nombre del servicio
-            if 'Servicio Recolección de' in service.name.lower():
-                parts = service.name.split(' - ')
-                if len(parts) > 0:
-                    residue_part = parts[0].replace('Servicio Recolección de ', '')
-                    self.residue_name = residue_part
+        vals = {'name': 'Unidad de servicio'}
+        candidates = [
+            'category_id', 'uom_type', 'factor', 'factor_inv', 
+            'ratio', 'ratio_inv', 'rounding', 'active', 'relative_uom_id'
+        ]
+        for f in candidates:
+            if f in unit._fields:
+                vals[f] = unit[f]
 
-    @api.onchange('residue_name', 'plan_manejo', 'residue_type')
-    def _onchange_residue_fields(self):
-        """Crear automáticamente el servicio cuando se completan los campos"""
-        if (self.create_new_service and self.residue_name and 
-            self.plan_manejo and self.residue_type and not self.product_id):
-            self._create_service_from_line_data()
-    
-    @api.onchange('residue_packaging_id')
-    def _onchange_residue_packaging(self):
-        """Sincronizar el embalaje del residuo con el embalaje del producto"""
-        if self.residue_packaging_id:
-            # En Odoo 19, product_packaging_id en sale.order.line también apunta a uom.uom
-            self.product_packaging_id = self.residue_packaging_id
-    
-    @api.onchange('residue_uom_id')
-    def _onchange_residue_uom(self):
-        """Sincronizar UoM del residuo con UoM del producto"""
-        if self.residue_uom_id:
-            self.product_uom = self.residue_uom_id
+        if 'active' in UoM._fields:
+            vals['active'] = True
 
-    def _create_service_from_line_data(self):
-        """Crear un servicio basado en los datos de la línea"""
-        if not (self.residue_name and self.plan_manejo and self.residue_type):
+        try:
+            return UoM.create(vals)
+        except Exception:
+            return unit
+
+    def _create_or_update_packaging_v19(self, record):
+        """Crea una UdM para embalaje si es necesario."""
+        if not record.create_new_packaging or not record.packaging_name:
             return
 
-        # Obtener categoría para servicios de residuos
-        category = self.env['product.category'].search([
-            ('name', 'ilike', 'servicios de residuos')
-        ], limit=1)
-        
-        if not category:
-            category = self.env['product.category'].create({
-                'name': 'Servicios de Residuos',
-            })
+        UoM = self.env['uom.uom'].sudo()
+        existing = UoM.search([('name', '=', record.packaging_name)], limit=1)
+        if existing:
+            record.residue_packaging_id = existing.id
+            return
 
-        # Crear el producto/servicio
-        plan_manejo_label = dict(self._fields['plan_manejo'].selection).get(self.plan_manejo, '')
-        residue_type_label = dict(self._fields['residue_type'].selection).get(self.residue_type, '')
+        unit = self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
+        vals = {'name': record.packaging_name}
+
+        if unit:
+            for f in ['category_id', 'uom_type', 'rounding', 'active', 'relative_uom_id', 'factor', 'factor_inv', 'ratio', 'ratio_inv']:
+                if f in unit._fields and f in UoM._fields:
+                    vals[f] = unit[f]
+
+        qty = record.residue_volume or 1.0
+        if 'factor' in UoM._fields:
+            vals['factor'] = (1.0 / qty) if qty else 1.0
+        elif 'ratio' in UoM._fields:
+            vals['ratio'] = (1.0 / qty) if qty else 1.0
+
+        if 'active' in UoM._fields:
+            vals['active'] = True
+
+        try:
+            new_uom = UoM.create(vals)
+            record.residue_packaging_id = new_uom.id
+        except Exception as e:
+            _logger.exception("Error creando embalaje. vals=%s", vals)
+
+    def _create_service_product(self):
+        """
+        Crea el producto real basado en los datos de la línea.
+        Eliminado ensure_one() para soportar creación en onchange (NewId).
+        """
+        # Validación mínima
+        if not (self.create_new_service and self.residue_name):
+            return None
+
+        # Evitar crear duplicados si ya tengo un product_id con el mismo nombre
+        if self.product_id and self.product_id.name == self.residue_name:
+            return self.product_id
+
+        Category = self.env['product.category'].sudo()
+        Product = self.env['product.product'].sudo()
+
+        category = Category.search([('name', 'ilike', 'servicios de residuos')], limit=1)
+        if not category:
+            category = Category.create({'name': 'Servicios de Residuos'})
+
+        service_uom = self._get_or_create_service_uom()
         
-        service_name = f"{self.residue_name}"
-        
-        service = self.env['product.product'].create({
-            'name': service_name,
+        # MODIFICACIÓN: Ya no generamos la descripción larga con Plan/Tipo/Capacidad.
+        # desc = f"Residuo: {self.residue_name}\nPlan: {plan_label}\nTipo: {type_label}..."
+
+        vals = {
+            'name': self.residue_name,
             'type': 'service',
             'categ_id': category.id,
             'sale_ok': True,
             'purchase_ok': False,
-            'description_sale': f"""Servicio de manejo de residuo: {self.residue_name}
-Plan de manejo: {plan_manejo_label}
-Tipo de residuo: {residue_type_label}
-Capacidad: {self.residue_capacity}
-Peso estimado: {self.residue_weight_kg} kg
-Unidades: {self.residue_volume} {self.residue_uom_id.name if self.residue_uom_id else ''}
-Embalaje: {self.residue_packaging_id.name if self.residue_packaging_id else 'No especificado'}""",
-            'default_code': f"SRV-{self.residue_type.upper()}-{self.id or 'NEW'}",
-        })
-
-        # Asignar el servicio creado
-        self.product_id = service.id
-        self.product_template_id = service.product_tmpl_id.id
-        self.name = service.name
-        if self.residue_volume:
-            self.product_uom_qty = self.residue_volume
+            # 'description_sale': desc,  <-- Se omite para que no se guarde en el producto
+            'uom_id': service_uom.id if service_uom else False,
+        }
         
-        # Establecer UoM a "Unidades" siempre
-        uom_unit = self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
-        if uom_unit:
-            if not self.residue_uom_id:
-                self.residue_uom_id = uom_unit
-            self.product_uom = uom_unit
-        
-        if self.residue_packaging_id:
-            # En Odoo 19 esto es válido porque ambos son uom.uom
-            self.product_packaging_id = self.residue_packaging_id
+        # En Odoo 19 es posible que uom_po_id no exista o sea requerido, lo manejamos seguro
+        if 'uom_po_id' in Product._fields and service_uom:
+             vals['uom_po_id'] = service_uom.id
 
-    @api.onchange('order_id.always_service')
-    def _onchange_order_always_service(self):
-        """Cuando cambia el campo always_service de la orden, ajustar el comportamiento"""
-        if hasattr(self.order_id, 'always_service') and self.order_id.always_service:
-            pass
-        else:
-            self.create_new_service = False
+        safe_vals = {k: v for k, v in vals.items() if k in Product._fields}
+        
+        try:
+            return Product.create(safe_vals)
+        except Exception as e:
+            _logger.error(f"Error creando producto servicio: {e}")
+            return False
+
+    # -------------------------------------------------------------------------
+    # CAMPOS
+    # -------------------------------------------------------------------------
+    residue_type = fields.Selection([('rsu', 'RSU'), ('rme', 'RME'), ('rp', 'RP')], string='Tipo de manejo')
     
+    plan_manejo = fields.Selection([
+        ('reciclaje', 'Reciclaje'),
+        ('coprocesamiento', 'Co-procesamiento'),
+        ('tratamiento_fisicoquimico', 'Tratamiento Físico-Químico'),
+        ('tratamiento_biologico', 'Tratamiento Biológico'),
+        ('tratamiento_termico', 'Tratamiento Térmico'),
+        ('confinamiento_controlado', 'Confinamiento Controlado'),
+        ('reutilizacion', 'Reutilización'),
+        ('destruccion_fiscal', 'Destrucción Fiscal'),
+    ], string="Plan de Manejo")
+
+    create_new_service = fields.Boolean(string="¿Nuevo Servicio?", default=False)
+    existing_service_id = fields.Many2one('product.product', string="Servicio Existente", domain="[('type', '=', 'service'), ('sale_ok', '=', True)]")
+    residue_name = fields.Char(string="Nombre del Residuo")
+
+    create_new_packaging = fields.Boolean(string="¿Nuevo Embalaje?", default=False)
+    packaging_name = fields.Char(string="Nombre Nuevo Embalaje")
+    residue_packaging_id = fields.Many2one('uom.uom', string="Embalaje Existente")
+
+    residue_capacity = fields.Char(string='Capacidad')
+    residue_weight_kg = fields.Float(string="Peso Total (kg)", default=0.0)
+    residue_volume = fields.Float(string="Unidades", default=1.0)
+    
+    weight_per_unit = fields.Float(string="Kg por Unidad", compute="_compute_weight_per_unit", store=True)
+    
+    residue_uom_id = fields.Many2one('uom.uom', string="Unidad de Medida Base", default=lambda self: self._get_or_create_service_uom())
+
+    # -------------------------------------------------------------------------
+    # ONCHANGES & LOGIC
+    # -------------------------------------------------------------------------
+    @api.depends('residue_volume', 'residue_weight_kg')
+    def _compute_weight_per_unit(self):
+        for record in self:
+            record.weight_per_unit = (record.residue_weight_kg / record.residue_volume) if record.residue_volume else 0.0
+
+    @api.onchange('create_new_service')
+    def _onchange_create_new_service(self):
+        if self.create_new_service:
+            self.existing_service_id = False
+            self.product_id = False
+            # Asegurar UoM base
+            if not self.residue_uom_id:
+                self.residue_uom_id = self._get_or_create_service_uom()
+            # Sincronizar UoM del producto
+            self.product_uom_id = self.residue_uom_id
+        else:
+            if not self.existing_service_id:
+                self.product_id = False
+
+    @api.onchange('create_new_packaging')
+    def _onchange_create_new_packaging(self):
+        if self.create_new_packaging:
+            self.residue_packaging_id = False
+        else:
+            self.packaging_name = False
+
+    @api.onchange('existing_service_id')
+    def _onchange_existing_service_id(self):
+        if self.existing_service_id and not self.create_new_service:
+            service = self.existing_service_id
+            self.product_id = service.id
+            self.product_template_id = service.product_tmpl_id.id
+            
+            # MODIFICACIÓN: Usar SOLO el nombre del servicio, ignorando description_sale
+            self.name = service.name
+            
+            self.residue_name = service.name
+            
+            uom = self._get_or_create_service_uom()
+            self.residue_uom_id = uom
+            # SIEMPRE usar la UoM del servicio, no del embalaje
+            self.product_uom_id = uom
+
+            self.create_new_packaging = False
+            self.packaging_name = False
+            self.residue_packaging_id = False
+
+    @api.onchange('residue_packaging_id')
+    def _onchange_residue_packaging(self):
+        """
+        CORRECCIÓN: Ya NO sobrescribimos product_uom_id con el embalaje.
+        Solo almacenamos el embalaje en su campo.
+        """
+        pass
+    
+    @api.onchange('residue_uom_id')
+    def _onchange_residue_uom(self):
+        """
+        Si cambia la UoM del residuo, actualizamos la del producto.
+        """
+        if self.residue_uom_id:
+            self.product_uom_id = self.residue_uom_id
+
+    @api.onchange('residue_name', 'plan_manejo', 'residue_type', 'residue_capacity')
+    def _onchange_residue_fields(self):
+        """
+        Crea el producto 'al vuelo' cuando el usuario llena los datos mínimos.
+        """
+        if self.create_new_service and self.residue_name:
+            # Crear el producto inmediatamente
+            new_product = self._create_service_product()
+            if new_product:
+                self.product_id = new_product.id
+                
+                # MODIFICACIÓN: Usar SOLO el nombre, sin description_sale
+                self.name = new_product.name
+                
+                # Usar la UoM del nuevo producto (que es 'Unidad de servicio')
+                if new_product.uom_id:
+                    self.product_uom_id = new_product.uom_id
+                elif self.residue_uom_id:
+                     self.product_uom_id = self.residue_uom_id
+
+    # -------------------------------------------------------------------------
+    # CRUD
+    # -------------------------------------------------------------------------
     @api.model_create_multi
     def create(self, vals_list):
-        """Establecer UoM por defecto al crear líneas"""
-        uom_unit = self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
+        uom_service = self._get_or_create_service_uom()
         for vals in vals_list:
-            # Establecer residue_uom_id si no está presente
-            if not vals.get('residue_uom_id') and uom_unit:
-                vals['residue_uom_id'] = uom_unit.id
-            # Establecer product_uom si no está presente
-            if not vals.get('product_uom') and uom_unit:
-                vals['product_uom'] = uom_unit.id
-        
-        return super().create(vals_list)
+            if not vals.get('residue_uom_id') and uom_service:
+                vals['residue_uom_id'] = uom_service.id
+            
+            # Asegurar que product_uom_id sea la del servicio, NO la del embalaje
+            if not vals.get('product_uom_id') and uom_service:
+                vals['product_uom_id'] = uom_service.id
+
+        lines = super().create(vals_list)
+
+        for line in lines:
+            # 1. Crear Embalaje si hace falta
+            if line.create_new_packaging and line.packaging_name:
+                line._create_or_update_packaging_v19(line)
+            
+            # CORRECCIÓN: No sobrescribir product_uom_id con residue_packaging_id
+            # El embalaje queda solo en line.residue_packaging_id
+
+            # 2. El servicio generalmente ya se creó en onchange, 
+            # pero por seguridad verificamos:
+            if line.create_new_service and not line.product_id and line.residue_name:
+                service = line._create_service_product()
+                if service:
+                    line.product_id = service.id
+                    line.product_uom_qty = line.residue_volume
+                    # MODIFICACIÓN: Asegurar que la descripción de la línea sea solo el nombre
+                    line.name = service.name
+                    # Aseguramos UoM correcta
+                    if service.uom_id:
+                        line.product_uom_id = service.uom_id
+
+        return lines
+
+    def write(self, vals):
+        res = super().write(vals)
+        for line in self:
+            # Embalaje
+            if 'create_new_packaging' in vals or 'packaging_name' in vals:
+                line._create_or_update_packaging_v19(line)
+                # CORRECCIÓN: No tocamos product_uom_id aquí
+
+            # Servicio
+            if line.create_new_service and line.residue_name and (not line.product_id or line.product_id.name != line.residue_name):
+                if not line.product_id:
+                     service = line._create_service_product()
+                     if service:
+                         line.product_id = service.id
+                         # MODIFICACIÓN: Asegurar que la descripción sea solo el nombre
+                         line.name = service.name
+                         # Aseguramos UoM correcta
+                         if service.uom_id:
+                            line.product_uom_id = service.uom_id
+        return res

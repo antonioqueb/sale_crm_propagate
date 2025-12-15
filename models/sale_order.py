@@ -7,9 +7,15 @@ class SaleOrder(models.Model):
     service_frequency = fields.Char(string='Frecuencia del Servicio')
     residue_new = fields.Boolean(string='¿Residuo Nuevo?')
     requiere_visita = fields.Boolean(string='Requiere visita presencial')
-    pickup_location = fields.Char(string='Ubicación de recolección')
 
-    # CAMPO QUE FALTABA - AÑADIDO
+    pickup_location = fields.Char(string='Ubicación de recolección')
+    pickup_location_manual = fields.Boolean(
+        string='Ubicación de recolección (manual)',
+        default=False,
+        copy=False,
+        help='Si está activo, no se sobrescribe automáticamente con la dirección del cliente.'
+    )
+
     expiration_date = fields.Date(
         string='Fecha de Expiración',
         default=lambda self: date(date.today().year, 12, 31)
@@ -35,7 +41,7 @@ class SaleOrder(models.Model):
         help='Referencia a una cotización anterior para el mismo cliente. Útil cuando se agregan nuevos tipos de residuos.',
         domain="[('partner_id', '=', partner_id), ('id', '!=', id)]"
     )
-    
+
     # Campo computado para mostrar cotizaciones relacionadas (hijas)
     child_quotations_ids = fields.One2many(
         'sale.order',
@@ -43,7 +49,7 @@ class SaleOrder(models.Model):
         string='Cotizaciones Derivadas',
         help='Cotizaciones posteriores que referencian a esta cotización'
     )
-    
+
     # Contador de cotizaciones relacionadas
     child_quotations_count = fields.Integer(
         string='Cotizaciones Derivadas',
@@ -57,9 +63,9 @@ class SaleOrder(models.Model):
         ('mediana', 'Mediana'),
         ('grande', 'Grande')
     ], string="Tamaño de Empresa")
-    
+
     industrial_sector = fields.Char(string="Giro Industrial/Actividad Económica")
-    
+
     # ORIGEN Y CLASIFICACIÓN COMERCIAL
     prospect_priority = fields.Selection([
         ('baja', 'Baja'),
@@ -67,22 +73,22 @@ class SaleOrder(models.Model):
         ('alta', 'Alta'),
         ('estrategico', 'Estratégico')
     ], string="Prioridad del Prospecto")
-    
+
     estimated_business_potential = fields.Float(string="Potencial Estimado de Negocio")
-    
+
     # INFORMACIÓN OPERATIVA
     access_restrictions = fields.Text(string="Restricciones de Acceso")
     allowed_collection_schedules = fields.Text(string="Horarios Permitidos para Recolección")
     current_container_types = fields.Text(string="Tipo de Contenedores Actuales")
     special_handling_conditions = fields.Text(string="Condiciones Especiales de Manejo")
     seasonality = fields.Text(string="Estacionalidad")
-    
+
     # INFORMACIÓN REGULATORIA
     waste_generator_registration = fields.Char(string="Registro como Generador de Residuos")
     environmental_authorizations = fields.Text(string="Autorizaciones Ambientales Vigentes")
     quality_certifications = fields.Text(string="Certificaciones de Calidad")
     other_relevant_permits = fields.Text(string="Otros Permisos Relevantes")
-    
+
     # COMPETENCIA Y MERCADO
     current_service_provider = fields.Char(string="Proveedor Actual de Servicios")
     current_costs = fields.Float(string="Costos Actuales")
@@ -93,9 +99,9 @@ class SaleOrder(models.Model):
         ('alto', 'Alto'),
         ('muy_alto', 'Muy Alto')
     ], string="Nivel de Satisfacción con Proveedor Actual")
-    
+
     reason_for_new_provider = fields.Text(string="Motivo de Búsqueda de Nuevo Proveedor")
-    
+
     # REQUERIMIENTOS ESPECIALES
     specific_certificates_needed = fields.Text(string="Necesidad de Certificados Específicos")
     reporting_requirements = fields.Text(string="Requerimientos de Reporteo")
@@ -106,14 +112,66 @@ class SaleOrder(models.Model):
         ('3_meses', '3 Meses'),
         ('sin_prisa', 'Sin Prisa')
     ], string="Urgencia del Servicio")
-    
+
     estimated_budget = fields.Float(string="Presupuesto Estimado")
-    
+
     # CAMPOS DE SEGUIMIENTO
     next_contact_date = fields.Datetime(string="Fecha de Próximo Contacto")
     pending_actions = fields.Text(string="Acciones Pendientes")
     conversation_notes = fields.Text(string="Notas de Conversaciones")
 
+    # -------------------------------------------------------------------------
+    # HELPERS: AUTOFILL pickup_location desde dirección del cliente
+    # -------------------------------------------------------------------------
+    def _format_partner_address_one_line(self, partner):
+        """
+        Devuelve la dirección del partner en una sola línea.
+        Usa _display_address() (estándar) y colapsa saltos de línea.
+        """
+        if not partner:
+            return False
+        addr = (partner._display_address() or '').strip()
+        parts = [p.strip().strip(',') for p in addr.splitlines() if p.strip()]
+        return ', '.join(parts) if parts else False
+
+    def _autofill_pickup_location(self, force=False):
+        """
+        Si pickup_location está vacío (o force=True) y no es manual,
+        rellena con dirección del cliente (shipping si existe, si no partner principal).
+        """
+        if self.env.context.get('skip_pickup_autofill'):
+            return
+
+        for order in self:
+            # Si el usuario lo fijó manualmente, nunca lo pisamos
+            if order.pickup_location_manual:
+                continue
+
+            if (not force) and order.pickup_location:
+                continue
+
+            partner = order.partner_shipping_id or order.partner_id
+            addr = order._format_partner_address_one_line(partner)
+
+            if addr and addr != order.pickup_location:
+                order.with_context(skip_pickup_autofill=True).write({
+                    'pickup_location': addr,
+                    'pickup_location_manual': False,
+                })
+
+    @api.onchange('partner_id', 'partner_shipping_id')
+    def _onchange_partner_autofill_pickup_location(self):
+        """
+        En pantalla: si NO es manual, sincroniza pickup_location con dirección.
+        """
+        for order in self:
+            if not order.pickup_location_manual:
+                partner = order.partner_shipping_id or order.partner_id
+                order.pickup_location = order._format_partner_address_one_line(partner) or False
+
+    # -------------------------------------------------------------------------
+    # COMPUTES / ACTIONS
+    # -------------------------------------------------------------------------
     @api.depends('child_quotations_ids')
     def _compute_child_quotations_count(self):
         for record in self:
@@ -155,77 +213,155 @@ class SaleOrder(models.Model):
             }
         }
 
-    @api.model
-    def create(self, vals):
-        # Crea primero la orden
-        order = super().create(vals)
-        # Si viene de CRM, copiamos los datos
-        opportunity_id = vals.get('opportunity_id') or self.env.context.get('default_opportunity_id')
-        if opportunity_id:
-            lead = self.env['crm.lead'].browse(opportunity_id)
-            order.write({
-                'service_frequency': lead.service_frequency,
-                'residue_new': lead.residue_new,
-                'requiere_visita': lead.requiere_visita,
-                'pickup_location': lead.pickup_location,
-                'always_service': True,  # Siempre true cuando viene de CRM
-                # INFORMACIÓN BÁSICA DEL PROSPECTO
-                'company_size': lead.company_size,
-                'industrial_sector': lead.industrial_sector,
-                'prospect_priority': lead.prospect_priority,
-                'estimated_business_potential': lead.estimated_business_potential,
-                # INFORMACIÓN OPERATIVA
-                'access_restrictions': lead.access_restrictions,
-                'allowed_collection_schedules': lead.allowed_collection_schedules,
-                'current_container_types': lead.current_container_types,
-                'special_handling_conditions': lead.special_handling_conditions,
-                'seasonality': lead.seasonality,
-                # INFORMACIÓN REGULATORIA
-                'waste_generator_registration': lead.waste_generator_registration,
-                'environmental_authorizations': lead.environmental_authorizations,
-                'quality_certifications': lead.quality_certifications,
-                'other_relevant_permits': lead.other_relevant_permits,
-                # COMPETENCIA Y MERCADO
-                'current_service_provider': lead.current_service_provider,
-                'current_costs': lead.current_costs,
-                'current_provider_satisfaction': lead.current_provider_satisfaction,
-                'reason_for_new_provider': lead.reason_for_new_provider,
-                # REQUERIMIENTOS ESPECIALES
-                'specific_certificates_needed': lead.specific_certificates_needed,
-                'reporting_requirements': lead.reporting_requirements,
-                'service_urgency': lead.service_urgency,
-                'estimated_budget': lead.estimated_budget,
-                # CAMPOS DE SEGUIMIENTO
-                'next_contact_date': lead.next_contact_date,
-                'pending_actions': lead.pending_actions,
-                'conversation_notes': lead.conversation_notes,
-            })
-            
-            # Crear líneas solo con servicios creados - INCLUYENDO CAPACIDAD
-            lines = []
-            for res in lead.residue_line_ids:
-                if hasattr(res, 'product_id') and res.product_id:
-                    lines.append((0, 0, {
-                        'product_id': res.product_id.id,
-                        'name': res.product_id.name,
+    # -------------------------------------------------------------------------
+    # CRUD
+    # -------------------------------------------------------------------------
+    @api.model_create_multi
+    def create(self, vals_list):
+        """
+        Sobrescritura de create para manejar la propagación de datos desde CRM.
+        Utiliza api.model_create_multi para soportar la creación por lotes (estándar Odoo 19).
+        """
+        # 1. Crear las órdenes primero usando super
+        orders = super().create(vals_list)
+
+        # 2. Iterar sobre las órdenes creadas y sus valores correspondientes
+        for order, vals in zip(orders, vals_list):
+            # Obtener opportunity_id del diccionario de valores o del contexto
+            opportunity_id = vals.get('opportunity_id') or self.env.context.get('default_opportunity_id')
+
+            if opportunity_id:
+                lead = self.env['crm.lead'].browse(opportunity_id)
+
+                # Mapeo de ubicación (LIMPIO, sin contact_address_complete)
+                pickup_addr = False
+                if lead.pickup_location_id:
+                    pickup_addr = order._format_partner_address_one_line(lead.pickup_location_id) or lead.pickup_location_id.name
+
+                # Preparar valores a actualizar en la orden
+                update_vals = {
+                    'service_frequency': lead.service_frequency,
+                    'residue_new': lead.residue_new,
+                    'requiere_visita': lead.requiere_visita,
+                    'pickup_location': pickup_addr,
+                    'pickup_location_manual': bool(pickup_addr),  # si viene del lead, lo tratamos como valor fijado
+                    'always_service': True,
+                    # INFORMACIÓN BÁSICA DEL PROSPECTO
+                    'company_size': lead.company_size,
+                    'industrial_sector': lead.industrial_sector,
+                    'prospect_priority': lead.prospect_priority,
+                    'estimated_business_potential': lead.estimated_business_potential,
+                    # INFORMACIÓN OPERATIVA
+                    'access_restrictions': lead.access_restrictions,
+                    'allowed_collection_schedules': lead.allowed_collection_schedules,
+                    'current_container_types': lead.current_container_types,
+                    'special_handling_conditions': lead.special_handling_conditions,
+                    'seasonality': lead.seasonality,
+                    # INFORMACIÓN REGULATORIA
+                    'waste_generator_registration': lead.waste_generator_registration,
+                    'environmental_authorizations': lead.environmental_authorizations,
+                    'quality_certifications': lead.quality_certifications,
+                    'other_relevant_permits': lead.other_relevant_permits,
+                    # COMPETENCIA Y MERCADO
+                    'current_service_provider': lead.current_service_provider,
+                    'current_costs': lead.current_costs,
+                    'current_provider_satisfaction': lead.current_provider_satisfaction,
+                    'reason_for_new_provider': lead.reason_for_new_provider,
+                    # REQUERIMIENTOS ESPECIALES
+                    'specific_certificates_needed': lead.specific_certificates_needed,
+                    'reporting_requirements': lead.reporting_requirements,
+                    'service_urgency': lead.service_urgency,
+                    'estimated_budget': lead.estimated_budget,
+                    # CAMPOS DE SEGUIMIENTO
+                    'next_contact_date': lead.next_contact_date,
+                    'pending_actions': lead.pending_actions,
+                    'conversation_notes': lead.conversation_notes,
+                }
+
+                # Preparar líneas si hay residuos en el lead
+                lines = []
+                for res in lead.residue_line_ids:
+
+                    product_id = res.product_id.id if res.product_id else False
+                    product_name = res.product_id.name if res.product_id else res.name
+
+                    # --- LÓGICA DE PROTECCIÓN CONTRA DUPLICADOS ---
+                    # Si el CRM ya generó el producto, en Venta NO debe ser nuevo, sino existente.
+                    is_new_service = res.create_new_service
+                    existing_srv_id = res.existing_service_id.id if res.existing_service_id else False
+
+                    if product_id:
+                        # Ya existe el producto, lo tratamos como existente
+                        is_new_service = False
+                        existing_srv_id = product_id
+
+                    line_data = {
+                        'product_id': product_id,
+                        'name': product_name or 'Nuevo Servicio',
                         'product_uom_qty': res.volume,
-                        'product_uom': res.uom_id.id if res.uom_id else False,
-                        'product_packaging_id': res.packaging_id.id if res.packaging_id else False,
+
+                        # Campos de lógica de Servicio (CORREGIDOS)
+                        'create_new_service': is_new_service,
+                        'existing_service_id': existing_srv_id,
+
+                        'residue_name': res.name,
                         'residue_type': res.residue_type,
                         'plan_manejo': res.plan_manejo,
-                        'create_new_service': res.create_new_service,
-                        'residue_name': res.name,
-                        'residue_volume': res.volume,
-                        'residue_capacity': res.capacity,  # NUEVO: Capacidad
+
+                        # Campos de lógica de Embalaje
+                        'create_new_packaging': res.create_new_packaging,
+                        'packaging_name': res.packaging_name,
+                        'residue_packaging_id': res.packaging_id.id if res.packaging_id else False,
+
+                        # Medidas
+                        'residue_capacity': res.capacity,
                         'residue_weight_kg': res.weight_kg,
+                        'residue_volume': res.volume,
                         'weight_per_unit': res.weight_per_unit,
                         'residue_uom_id': res.uom_id.id if res.uom_id else False,
-                        'residue_packaging_id': res.packaging_id.id if res.packaging_id else False,
-                    }))
-            
-            if lines:
-                order.write({'order_line': lines})
-        return order
+                    }
+
+                    # Asignar UoM de la línea de venta
+                    if res.uom_id:
+                        line_data['product_uom_id'] = res.uom_id.id
+                    elif res.product_id and res.product_id.uom_id:
+                        line_data['product_uom_id'] = res.product_id.uom_id.id
+
+                    lines.append((0, 0, line_data))
+
+                if lines:
+                    update_vals['order_line'] = lines
+
+                # Actualizar la orden
+                order.write(update_vals)
+
+        # 3) Asegurar autofill cuando NO venga del lead o venga vacío
+        #    (si pickup_location_manual=True no se toca)
+        orders._autofill_pickup_location(force=False)
+
+        return orders
+
+    def write(self, vals):
+        """
+        - Si el usuario edita pickup_location, lo marcamos como manual.
+        - Si cambian partner_id/partner_shipping_id y NO es manual, lo re-llenamos.
+        """
+        if self.env.context.get('skip_pickup_autofill'):
+            return super().write(vals)
+
+        # Si se está escribiendo pickup_location explícitamente, lo consideramos manual si trae contenido
+        if 'pickup_location' in vals:
+            vals['pickup_location_manual'] = bool(vals.get('pickup_location'))
+
+        res = super().write(vals)
+
+        # Si cambió el cliente o dirección de envío y no es manual, resetea/sincroniza
+        if 'pickup_location' not in vals and any(k in vals for k in ('partner_id', 'partner_shipping_id')):
+            self._autofill_pickup_location(force=True)
+        else:
+            self._autofill_pickup_location(force=False)
+
+        return res
 
     def action_confirm(self):
         """Si no_delivery=True, cancela todos los albaranes tras confirmar."""

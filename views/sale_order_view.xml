@@ -6,7 +6,10 @@
     <field name="inherit_id" ref="sale.view_order_form"/>
     <field name="arch" type="xml">
 
-      <!-- 1) Pestaña "Informe General" después de Líneas de la Orden -->
+      <!-- =========================================================
+           1) PESTAÑAS ADICIONALES
+           ========================================================= -->
+      
       <xpath expr="//notebook/page[@name='order_lines']" position="after">
         
         <!-- Nueva página: Gestión de Servicios -->
@@ -20,24 +23,24 @@
           <!-- Información del Servicio -->
           <group string="Información del Servicio">
             <group>
-              <field name="service_frequency" readonly="1"/>
-              <field name="pickup_location" readonly="1"/>
+              <field name="service_frequency"/>
+              <field name="pickup_location"/>
             </group>
             <group>
-              <field name="residue_new" readonly="1"/>
-              <field name="requiere_visita" readonly="1"/>
+              <field name="residue_new"/>
+              <field name="requiere_visita"/>
             </group>
           </group>
 
           <!-- Información Básica del Prospecto -->
           <group string="Información Básica del Prospecto">
             <group>
-              <field name="company_size" readonly="1"/>
-              <field name="industrial_sector" readonly="1"/>
+              <field name="company_size"/>
+              <field name="industrial_sector"/>
             </group>
             <group>
-              <field name="prospect_priority" readonly="1"/>
-              <field name="estimated_business_potential" readonly="1"/>
+              <field name="prospect_priority"/>
+              <field name="estimated_business_potential"/>
             </group>
           </group>
 
@@ -48,60 +51,60 @@
           <!-- Información Operativa -->
           <group string="Información Operativa">
             <group>
-              <field name="access_restrictions" widget="text" readonly="1"/>
-              <field name="allowed_collection_schedules" widget="text" readonly="1"/>
-              <field name="current_container_types" widget="text" readonly="1"/>
+              <field name="access_restrictions" widget="text"/>
+              <field name="allowed_collection_schedules" widget="text"/>
+              <field name="current_container_types" widget="text"/>
             </group>
             <group>
-              <field name="special_handling_conditions" widget="text" readonly="1"/>
-              <field name="seasonality" widget="text" readonly="1"/>
+              <field name="special_handling_conditions" widget="text"/>
+              <field name="seasonality" widget="text"/>
             </group>
           </group>
 
           <!-- Información Regulatoria -->
           <group string="Información Regulatoria">
             <group>
-              <field name="waste_generator_registration" readonly="1"/>
-              <field name="environmental_authorizations" widget="text" readonly="1"/>
+              <field name="waste_generator_registration"/>
+              <field name="environmental_authorizations" widget="text"/>
             </group>
             <group>
-              <field name="quality_certifications" widget="text" readonly="1"/>
-              <field name="other_relevant_permits" widget="text" readonly="1"/>
+              <field name="quality_certifications" widget="text"/>
+              <field name="other_relevant_permits" widget="text"/>
             </group>
           </group>
 
           <!-- Competencia y Mercado -->
           <group string="Competencia y Mercado">
             <group>
-              <field name="current_service_provider" readonly="1"/>
-              <field name="current_costs" readonly="1"/>
-              <field name="current_provider_satisfaction" readonly="1"/>
+              <field name="current_service_provider"/>
+              <field name="current_costs"/>
+              <field name="current_provider_satisfaction"/>
             </group>
             <group>
-              <field name="reason_for_new_provider" widget="text" readonly="1"/>
+              <field name="reason_for_new_provider" widget="text"/>
             </group>
           </group>
 
           <!-- Requerimientos Especiales -->
           <group string="Requerimientos Especiales">
             <group>
-              <field name="specific_certificates_needed" widget="text" readonly="1"/>
-              <field name="reporting_requirements" widget="text" readonly="1"/>
+              <field name="specific_certificates_needed" widget="text"/>
+              <field name="reporting_requirements" widget="text"/>
             </group>
             <group>
-              <field name="service_urgency" readonly="1"/>
-              <field name="estimated_budget" readonly="1"/>
+              <field name="service_urgency"/>
+              <field name="estimated_budget"/>
             </group>
           </group>
 
           <!-- Campos de Seguimiento -->
           <group string="Seguimiento">
             <group>
-              <field name="next_contact_date" readonly="1"/>
-              <field name="pending_actions" widget="text" readonly="1"/>
+              <field name="next_contact_date"/>
+              <field name="pending_actions" widget="text"/>
             </group>
             <group>
-              <field name="conversation_notes" widget="text" readonly="1"/>
+              <field name="conversation_notes" widget="text"/>
             </group>
           </group>
 
@@ -168,89 +171,11 @@
       </xpath>
 
       <!-- 3) Campos globales antes de Términos de pago -->
-      <xpath expr="//field[@name='payment_term_id']" position="before">
-        <group>
+      <xpath expr="//field[@name='date_order']" position="before">
           <field name="expiration_date"/>
-        </group>
       </xpath>
 
-      <!-- 4) Tree: modificar columnas en las líneas - AGREGANDO CAPACIDAD -->
-      <xpath expr="//page[@name='order_lines']//list/field[@name='product_template_id']" position="replace">
-        
-        <!-- Campo de control para decidir crear o seleccionar -->
-        <field name="create_new_service" string="Crear Nuevo"/>
-        
-        <!-- Campo para seleccionar servicio existente -->
-        <field name="existing_service_id" 
-               string="Servicio Existente"
-               options="{'no_create': True}"/>
-        
-        <!-- Campos siempre editables para información del residuo -->
-        <field name="residue_name" string="Nombre Residuo"/>
-        <field name="residue_type" string="Tipo" optional="show"/>
-        <field name="plan_manejo" string="Plan de Manejo" optional="show"/>
-        
-        <!-- NUEVO: Campo de capacidad -->
-        <field name="residue_capacity" string="Capacidad"/>
-        
-        <!-- CAMPOS DE PESO Y UNIDADES -->
-        <field name="residue_weight_kg" string="Peso Total (kg)"/>
-        <field name="residue_volume" string="Unidades"/>
-        <field name="weight_per_unit" string="Kg/Unidad" readonly="1"/>
-        
-        <!-- Campo de embalaje -->
-        <field name="residue_packaging_id" string="Embalaje"/>
-        
-        <!-- Campo de UoM (siempre debe mostrar "Unidades") -->
-        <field name="residue_uom_id" string="UoM" readonly="1"/>
-        
-      </xpath>
-
-      <!-- 5) Agregar campos en el final de la lista -->
-      <xpath expr="//page[@name='order_lines']//list/field[@name='price_subtotal']" position="after">
-        <field name="product_id" invisible="1"/>
-      </xpath>
-
-      <!-- Agregar los nuevos campos después del product_id en la vista de formulario -->
-      <xpath expr="//page[@name='order_lines']//form//field[@name='product_id']" position="after">
-        
-        <!-- Control de creación (siempre visible) -->
-        <group string="Configuración del Servicio">
-          <field name="create_new_service"/>
-        </group>
-        
-        <!-- Selección de servicio existente -->
-        <group string="Servicio Existente" invisible="create_new_service">
-          <field name="existing_service_id" 
-                 string="Servicio Existente"
-                 options="{'no_create': True}"
-                 placeholder="Buscar servicio existente..."/>
-          <separator string="Información extraída del servicio" colspan="2" invisible="not existing_service_id"/>
-          <field name="residue_name" string="Nombre" readonly="not create_new_service" invisible="not existing_service_id"/>
-          <field name="residue_type" string="Tipo de Residuo" readonly="not create_new_service" invisible="not existing_service_id"/>
-          <field name="plan_manejo" string="Plan de Manejo" readonly="not create_new_service" invisible="not existing_service_id"/>
-        </group>
-        
-        <!-- Campos para crear nuevo servicio -->
-        <group string="Crear Nuevo Servicio" invisible="not create_new_service">
-          <field name="residue_name"/>
-          <field name="residue_type"/>
-          <field name="plan_manejo"/>
-        </group>
-        
-        <!-- Información de cantidades, capacidad, peso y embalaje - SIEMPRE EDITABLE -->
-        <group string="Cantidades, Capacidad, Peso y Embalaje">
-          <field name="residue_capacity" string="Capacidad" placeholder="Ejemplo: 200"/>
-          <field name="residue_weight_kg" string="Peso Total (kg)" placeholder="Ejemplo: 200"/>
-          <field name="residue_volume" string="Número de Unidades" placeholder="Ejemplo: 1"/>
-          <field name="weight_per_unit" string="Kg por Unidad" readonly="1"/>
-          <field name="residue_uom_id" readonly="1"/>
-          <field name="residue_packaging_id" string="Embalaje"/>
-        </group>
-        
-      </xpath>
-
-      <!-- 7) Agregar botón en el header (arriba a la derecha) -->
+      <!-- 4) Botón en el header -->
       <xpath expr="//header" position="inside">
         <button type="object" 
                 name="action_create_related_quotation" 
@@ -258,6 +183,147 @@
                 class="btn btn-secondary"
                 invisible="state not in ['draft', 'sent']"
                 help="Crear una nueva cotización para este cliente con nuevos residuos"/>
+      </xpath>
+
+
+      <!-- =========================================================
+           5) MODIFICACIÓN LISTA DE LÍNEAS (ESTÉTICA CRM + FUNCIONALIDAD)
+           ========================================================= -->
+      
+      <!-- Ocultamos las columnas originales para no borrarlas y perder referencias -->
+      <xpath expr="//page[@name='order_lines']//list/field[@name='product_template_id']" position="attributes">
+         <attribute name="column_invisible">True</attribute>
+      </xpath>
+      
+      <!-- Ocultamos la descripción original para reinsertarla en nuestra posición deseada -->
+      <xpath expr="//page[@name='order_lines']//list/field[@name='name']" position="attributes">
+         <attribute name="column_invisible">True</attribute>
+      </xpath>
+
+      <!-- Insertamos nuestras columnas personalizadas al inicio -->
+      <xpath expr="//page[@name='order_lines']//list/field[@name='product_template_id']" position="before">
+        
+        <!-- A. Lógica SERVICIO (Toggle y campos condicionales) -->
+        <field name="create_new_service" 
+               string="Nuevo" 
+               widget="boolean_toggle" 
+               width="60px"/>
+        
+        <!-- Opción A1: Escribir nombre (Visible si Nuevo=True) -->
+        <field name="residue_name" 
+               string="Nombre"
+               invisible="not create_new_service"
+               required="create_new_service"
+               placeholder="Nombre del residuo..."
+               width="150px"/>
+        
+        <!-- Opción A2: Seleccionar existente (Visible si Nuevo=False) -->
+        <field name="existing_service_id"
+               string="Existente"
+               domain="[('sale_ok','=',True), ('type','=','service')]"
+               options="{'no_create': True, 'no_open': True}"
+               invisible="create_new_service"
+               required="not create_new_service"
+               placeholder="Buscar servicio..." 
+               width="150px"/>
+        <!-- D. DESCRIPCIÓN (Recuperada para permitir editar detalles de la partida) -->
+        <field name="name" 
+               string="Descripción" 
+               widget="section_and_note_text" 
+               optional="show"/>
+        
+        <!-- Informativos -->
+        <field name="residue_type" string="Tipo" optional="show" width="80px"/>
+        <field name="plan_manejo" string="Manejo" optional="show" width="100px"/>
+
+        <!-- B. Lógica EMBALAJE (Toggle y campos condicionales) -->
+        <field name="create_new_packaging" 
+               string="Nuevo Emb." 
+               widget="boolean_toggle"
+               width="60px"/>
+        
+        <!-- Opción B1: Escribir nuevo embalaje (Visible si NuevoEmb=True) -->
+        <field name="packaging_name" 
+               string="Embalaje" 
+               invisible="not create_new_packaging"
+               required="create_new_packaging"
+               placeholder="Ej: Tambor"
+               width="100px"/>
+        
+        <!-- Opción B2: Seleccionar existente (Visible si NuevoEmb=False) -->
+        <field name="residue_packaging_id" 
+               string="Emb. Existente" 
+               options="{'no_create': True}"
+               invisible="create_new_packaging"
+               required="not create_new_packaging"
+               placeholder="Selec..."
+               width="100px"/>
+
+        <!-- C. Medidas y Totales -->
+        <field name="residue_capacity" string="Capacidad" width="70px"/>
+        <field name="residue_weight_kg" string="Peso(kg)" width="70px"/>
+        <field name="residue_volume" string="Uds" width="70px" column_invisible="True"/>
+        <field name="weight_per_unit" string="Kg/U" optional="hide" column_invisible="True"/>
+        
+        <!-- UoM (Informativo) -->
+        <field name="residue_uom_id" string="UoM Base" optional="hide" column_invisible="True"/>
+        
+        
+        
+      </xpath>
+
+      <!-- Agregar campos ocultos necesarios al final de la lista -->
+      <xpath expr="//page[@name='order_lines']//list/field[@name='price_subtotal']" position="after">
+        <field name="product_id" column_invisible="True"/>
+        <field name="product_uom_id" column_invisible="True"/>
+      </xpath>
+
+      <!-- =========================================================
+           6) FORMULARIO DE LÍNEA (DETALLE / POPUP)
+           ========================================================= -->
+      <xpath expr="//page[@name='order_lines']//form//field[@name='product_id']" position="after">
+        
+        <!-- Control de creación -->
+        <group string="Configuración del Servicio">
+          <group>
+            <field name="create_new_service" widget="boolean_toggle"/>
+            <field name="create_new_packaging" widget="boolean_toggle"/>
+          </group>
+        </group>
+        
+        <!-- Selección de servicio existente -->
+        <group string="Servicio Existente" invisible="create_new_service">
+          <field name="existing_service_id" 
+                 options="{'no_create': True}"
+                 placeholder="Buscar servicio existente..."/>
+        </group>
+        
+        <!-- Campos para crear nuevo servicio -->
+        <group string="Detalles del Residuo">
+           <field name="residue_name" required="create_new_service"/>
+           <field name="residue_type"/>
+           <field name="plan_manejo"/>
+        </group>
+
+        <!-- Embalaje -->
+        <group string="Embalaje">
+           <field name="packaging_name" invisible="not create_new_packaging" required="create_new_packaging"/>
+           <field name="residue_packaging_id" invisible="create_new_packaging"/>
+        </group>
+        
+        <!-- Información de cantidades -->
+        <group string="Medidas y Pesos">
+          <group>
+            <field name="residue_capacity" placeholder="Ej: 200 L"/>
+            <field name="residue_volume" string="Número de Unidades"/>
+          </group>
+          <group>
+            <field name="residue_weight_kg" string="Peso Total (kg)"/>
+            <field name="weight_per_unit" readonly="1"/>
+            <field name="residue_uom_id" readonly="1"/>
+          </group>
+        </group>
+        
       </xpath>
 
     </field>
