@@ -285,7 +285,7 @@ class SaleOrder(models.Model):
                     product_id = res.product_id.id if res.product_id else False
                     product_name = res.product_id.name if res.product_id else res.name
 
-                    # --- LÓGICA DE PROTECCIÓN CONTRA DUPLICADOS ---
+                    # --- LÓGICA DE PROTECCIÓN CONTRA DUPLICADOS (SERVICIO) ---
                     # Si el CRM ya generó el producto, en Venta NO debe ser nuevo, sino existente.
                     is_new_service = res.create_new_service
                     existing_srv_id = res.existing_service_id.id if res.existing_service_id else False
@@ -295,12 +295,22 @@ class SaleOrder(models.Model):
                         is_new_service = False
                         existing_srv_id = product_id
 
+                    # --- LÓGICA DE PROTECCIÓN CONTRA DUPLICADOS (EMBALAJE) ---
+                    # AQUI ESTA LA CORRECCIÓN: Si el CRM tiene un ID de embalaje, YA NO es nuevo para la SO
+                    packaging_id = res.packaging_id.id if res.packaging_id else False
+                    is_new_packaging = res.create_new_packaging
+                    packaging_name_val = res.packaging_name
+
+                    if packaging_id:
+                        is_new_packaging = False
+                        packaging_name_val = False # Limpiamos el nombre para que no se vea el campo de texto
+
                     line_data = {
                         'product_id': product_id,
                         'name': product_name or 'Nuevo Servicio',
                         'product_uom_qty': res.volume,
 
-                        # Campos de lógica de Servicio (CORREGIDOS)
+                        # Campos de lógica de Servicio
                         'create_new_service': is_new_service,
                         'existing_service_id': existing_srv_id,
 
@@ -308,10 +318,10 @@ class SaleOrder(models.Model):
                         'residue_type': res.residue_type,
                         'plan_manejo': res.plan_manejo,
 
-                        # Campos de lógica de Embalaje
-                        'create_new_packaging': res.create_new_packaging,
-                        'packaging_name': res.packaging_name,
-                        'residue_packaging_id': res.packaging_id.id if res.packaging_id else False,
+                        # Campos de lógica de Embalaje (CORREGIDO)
+                        'create_new_packaging': is_new_packaging,
+                        'packaging_name': packaging_name_val,
+                        'residue_packaging_id': packaging_id,
 
                         # Medidas
                         'residue_capacity': res.capacity,
