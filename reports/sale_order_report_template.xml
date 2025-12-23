@@ -1,15 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
-    <!-- Heredar y extender el template del reporte de orden de venta -->
     <template id="report_saleorder_document_custom" inherit_id="sale.report_saleorder_document">
 
-        <!-- OCULTAR el bloque superior de dirección que imprime web.external_layout -->
-        <!-- Esto quita: "ALMERFAA FOR MEDIA ADVERTISING / Riyadh / Arabia Saudita" arriba del título -->
+        <!-- OCULTAR el bloque superior de dirección -->
         <xpath expr="//t[@t-set='address']" position="replace">
             <t t-set="address" t-value="''"/>
         </xpath>
 
-        <!-- OCULTAR bloque estándar de direcciones (facturación / envío) dentro del body -->
+        <!-- OCULTAR bloque estándar de direcciones -->
         <xpath expr="//t[@t-set='information_block']" position="replace">
             <t/>
         </xpath>
@@ -56,7 +54,6 @@
                         servicios.</p>
                     </div>
 
-                    <!-- Agregar imagen de flota de vehículos -->
                     <div class="row mb-5 mt-4 " style="text-align: center; margin-bottom: 20px;">
                         <div class="col-12 mb-5">
                             <img src="/sale_crm_propagate/static/description/frontal.png"
@@ -86,7 +83,7 @@
             <th name="th_quantity" class="text-end text-nowrap">Cantidad</th>
         </xpath>
 
-        <!-- Modificar el contenido de la celda de cantidad (sin product_packaging_id) -->
+        <!-- Modificar el contenido de la celda de cantidad -->
         <xpath expr="//td[@name='td_product_quantity']" position="replace">
             <td name="td_product_quantity" class="o_td_quantity text-end text-nowrap">
                 <span t-field="line.product_uom_qty">3</span>
@@ -98,6 +95,21 @@
         <!-- OCULTAR campos sensibles en las líneas del reporte -->
         <xpath expr="//span[@t-field='line.name']" position="after">
             <t t-set="hide_internal_fields" t-value="True"/>
+        </xpath>
+
+        <!-- OCULTAR encabezado columna de impuestos -->
+        <xpath expr="//th[@name='th_taxes']" position="replace">
+            <th name="th_taxes" style="display: none;"/>
+        </xpath>
+
+        <!-- OCULTAR celda de impuestos en cada línea -->
+        <xpath expr="//td[@name='td_taxes']" position="replace">
+            <td name="td_taxes" style="display: none;"/>
+        </xpath>
+
+        <!-- OCULTAR SUBTOTAL, IMPUESTOS Y TOTAL -->
+        <xpath expr="//div[@id='total']" position="replace">
+            <div id="total" style="display: none;"/>
         </xpath>
 
     </template>
