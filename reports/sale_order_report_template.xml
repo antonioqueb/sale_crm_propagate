@@ -22,6 +22,15 @@
 
         <!-- Agregar descripción personalizada antes de la tabla de líneas -->
         <xpath expr="//div[@class='oe_structure'][2]" position="after">
+            <!-- CSS para ocultar columna de impuestos (4ta) e importe (5ta) -->
+            <style>
+                .o_main_table th:nth-child(4),
+                .o_main_table td:nth-child(4),
+                .o_main_table th:nth-child(5),
+                .o_main_table td:nth-child(5) {
+                    display: none !important;
+                }
+            </style>
             <div class="row mt-4 mb-3" style="font-size: 13px; line-height: 1.2;">
                 <div class="col-12">
                     <h4 style="font-size: 14px; line-height: 1.2; margin-bottom: 8px;">
