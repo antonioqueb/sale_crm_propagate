@@ -97,16 +97,6 @@
             <t t-set="hide_internal_fields" t-value="True"/>
         </xpath>
 
-        <!-- OCULTAR encabezado columna de impuestos -->
-        <xpath expr="//th[@name='th_taxes']" position="replace">
-            <th name="th_taxes" style="display: none;"/>
-        </xpath>
-
-        <!-- OCULTAR celda de impuestos en cada línea -->
-        <xpath expr="//td[@name='td_taxes']" position="replace">
-            <td name="td_taxes" style="display: none;"/>
-        </xpath>
-
         <!-- OCULTAR SUBTOTAL, IMPUESTOS Y TOTAL -->
         <xpath expr="//div[@id='total']" position="replace">
             <div id="total" style="display: none;"/>
