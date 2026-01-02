@@ -25,6 +25,7 @@
             <group>
               <field name="service_frequency"/>
               <field name="pickup_location"/>
+              <field name="final_destination"/>
             </group>
             <group>
               <field name="residue_new"/>
