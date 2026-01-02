@@ -22,12 +22,12 @@
 
         <!-- Agregar descripción personalizada antes de la tabla de líneas -->
         <xpath expr="//div[@class='oe_structure'][2]" position="after">
-            <!-- CSS para ocultar columna de impuestos (4ta) e importe (5ta) -->
+            <!-- CSS para ocultar columna de impuestos (ahora 5ta) e importe (ahora 6ta) -->
             <style>
-                .o_main_table th:nth-child(4),
-                .o_main_table td:nth-child(4),
                 .o_main_table th:nth-child(5),
-                .o_main_table td:nth-child(5) {
+                .o_main_table td:nth-child(5),
+                .o_main_table th:nth-child(6),
+                .o_main_table td:nth-child(6) {
                     display: none !important;
                 }
             </style>
@@ -92,12 +92,24 @@
             <th name="th_quantity" class="text-end text-nowrap">Cantidad</th>
         </xpath>
 
+        <!-- NUEVO: Agregar columna "Capacidad" después de Cantidad -->
+        <xpath expr="//th[@name='th_quantity']" position="after">
+            <th name="th_capacity" class="text-nowrap">Capacidad</th>
+        </xpath>
+
         <!-- Modificar el contenido de la celda de cantidad -->
         <xpath expr="//td[@name='td_product_quantity']" position="replace">
             <td name="td_product_quantity" class="o_td_quantity text-end text-nowrap">
                 <span t-field="line.product_uom_qty">3</span>
                 <span t-if="line.residue_packaging_id" t-field="line.residue_packaging_id.name">TOTE</span>
                 <span t-else="" t-field="line.product_uom_id">units</span>
+            </td>
+        </xpath>
+
+        <!-- NUEVO: Celda "Capacidad" después de la celda de cantidad -->
+        <xpath expr="//td[@name='td_product_quantity']" position="after">
+            <td name="td_capacity" class="text-nowrap">
+                <span t-esc="line.residue_capacity or ''"/>
             </td>
         </xpath>
 
