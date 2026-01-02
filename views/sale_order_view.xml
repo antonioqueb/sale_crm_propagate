@@ -24,8 +24,33 @@
           <group string="Información del Servicio">
             <group>
               <field name="service_frequency"/>
-              <field name="pickup_location"/>
-              <field name="final_destination"/>
+
+              <!-- CAMBIO: selector real como CRM -->
+              <field name="pickup_location_id"
+                     widget="res_partner_many2one"
+                     context="{
+                        'default_parent_id': partner_id,
+                        'default_type': 'delivery',
+                        'show_address': 1
+                     }"
+                     domain="['|', ('parent_id', '=', partner_id), ('id', '=', partner_id)]"
+                     options="{'always_reload': True, 'no_quick_create': True}"
+                     placeholder="Seleccionar ubicación de recolección..."
+              />
+
+              <!-- CAMBIO: selector real como CRM -->
+              <field name="final_destination_id"
+                     widget="res_partner_many2one"
+                     context="{
+                        'default_parent_id': partner_id,
+                        'default_type': 'delivery',
+                        'show_address': 1
+                     }"
+                     domain="['|', ('parent_id', '=', partner_id), ('id', '=', partner_id)]"
+                     options="{'always_reload': True, 'no_quick_create': True}"
+                     placeholder="Seleccionar destino final..."
+              />
+
             </group>
             <group>
               <field name="residue_new"/>
@@ -268,8 +293,6 @@
         
         <!-- UoM (Informativo) -->
         <field name="residue_uom_id" string="UoM Base" optional="hide" column_invisible="True"/>
-        
-        
         
       </xpath>
 

@@ -13,7 +13,13 @@ class SaleOrder(models.Model):
     residue_new = fields.Boolean(string='¿Residuo Nuevo?')
     requiere_visita = fields.Boolean(string='Requiere visita presencial')
 
-    pickup_location = fields.Char(string='Ubicación de recolección')
+    # CAMBIO: de Char a Many2one (selección real como CRM)
+    pickup_location_id = fields.Many2one(
+        'res.partner',
+        string='Ubicación de recolección',
+        ondelete='set null',
+        help='Contacto/dirección seleccionada para la recolección.'
+    )
     pickup_location_manual = fields.Boolean(
         string='Ubicación de recolección (manual)',
         default=False,
@@ -21,18 +27,18 @@ class SaleOrder(models.Model):
         help='Si está activo, no se sobrescribe automáticamente con la dirección del cliente.'
     )
 
-    # NUEVO: Destino final (texto + manual + referencia contacto)
-    final_destination = fields.Char(string='Destino final')
+    # CAMBIO: Destino final ahora solo selección (Many2one), ya no texto
+    final_destination_id = fields.Many2one(
+        'res.partner',
+        string='Destino final',
+        ondelete='set null',
+        help='Contacto/dirección seleccionada como destino final.'
+    )
     final_destination_manual = fields.Boolean(
         string='Destino final (manual)',
         default=False,
         copy=False,
         help='Si está activo, no se sobrescribe automáticamente con el valor del CRM.'
-    )
-    final_destination_id = fields.Many2one(
-        'res.partner',
-        string='Destino final (contacto)',
-        ondelete='set null'
     )
 
     expiration_date = fields.Date(
@@ -135,7 +141,7 @@ class SaleOrder(models.Model):
     conversation_notes = fields.Text(string="Notas de Conversaciones")
 
     # -------------------------------------------------------------------------
-    # HELPERS: FORMATO DIRECCIÓN EN UNA LÍNEA
+    # HELPERS: FORMATO DIRECCIÓN EN UNA LÍNEA (solo para display / reportes)
     # -------------------------------------------------------------------------
     def _format_partner_address_one_line(self, partner):
         """
@@ -146,15 +152,15 @@ class SaleOrder(models.Model):
             return False
         addr = (partner._display_address() or '').strip()
         parts = [p.strip().strip(',') for p in addr.splitlines() if p.strip()]
-        return ', '.join(parts) if parts else False
+        return ', '.join(parts) if parts else (partner.name or False)
 
     # -------------------------------------------------------------------------
-    # HELPERS: AUTOFILL pickup_location desde dirección del cliente
+    # HELPERS: AUTOFILL pickup_location_id desde partner_shipping_id/partner_id
     # -------------------------------------------------------------------------
     def _autofill_pickup_location(self, force=False):
         """
-        Si pickup_location está vacío (o force=True) y no es manual,
-        rellena con dirección del cliente (shipping si existe, si no partner principal).
+        Si pickup_location_id está vacío (o force=True) y no es manual,
+        rellena con partner_shipping_id si existe, si no partner_id.
         """
         if self.env.context.get('skip_pickup_autofill'):
             return
@@ -162,27 +168,24 @@ class SaleOrder(models.Model):
         for order in self:
             if order.pickup_location_manual:
                 continue
-            if (not force) and order.pickup_location:
+            if (not force) and order.pickup_location_id:
                 continue
 
             partner = order.partner_shipping_id or order.partner_id
-            addr = order._format_partner_address_one_line(partner)
-
-            if addr and addr != order.pickup_location:
+            if partner and partner.id != (order.pickup_location_id.id if order.pickup_location_id else False):
                 order.with_context(skip_pickup_autofill=True).write({
-                    'pickup_location': addr,
+                    'pickup_location_id': partner.id,
                     'pickup_location_manual': False,
                 })
 
     @api.onchange('partner_id', 'partner_shipping_id')
     def _onchange_partner_autofill_pickup_location(self):
         """
-        En pantalla: si NO es manual, sincroniza pickup_location con dirección.
+        En pantalla: si NO es manual, sincroniza pickup_location_id con partner_shipping/partner.
         """
         for order in self:
             if not order.pickup_location_manual:
-                partner = order.partner_shipping_id or order.partner_id
-                order.pickup_location = order._format_partner_address_one_line(partner) or False
+                order.pickup_location_id = order.partner_shipping_id or order.partner_id
 
     # -------------------------------------------------------------------------
     # COMPUTES / ACTIONS
@@ -220,9 +223,11 @@ class SaleOrder(models.Model):
                 'default_partner_id': self.partner_id.id,
                 'default_related_quotation_id': self.id,
                 'default_service_frequency': self.service_frequency,
-                'default_pickup_location': self.pickup_location,
-                'default_final_destination': self.final_destination,
+
+                # CAMBIO: defaults como Many2one (selección real)
+                'default_pickup_location_id': self.pickup_location_id.id if self.pickup_location_id else False,
                 'default_final_destination_id': self.final_destination_id.id if self.final_destination_id else False,
+
                 'default_company_size': self.company_size,
                 'default_industrial_sector': self.industrial_sector,
                 'default_prospect_priority': self.prospect_priority,
@@ -243,40 +248,34 @@ class SaleOrder(models.Model):
 
         for order, vals in zip(orders, vals_list):
             opportunity_id = vals.get('opportunity_id') or self.env.context.get('default_opportunity_id')
-
             if not opportunity_id:
                 continue
 
             lead = self.env['crm.lead'].browse(opportunity_id)
 
             # -----------------------------
-            # Pickup desde CRM (si existe)
+            # Pickup desde CRM (Many2one)
             # -----------------------------
-            pickup_addr = False
-            if getattr(lead, 'pickup_location_id', False):
-                pickup_addr = order._format_partner_address_one_line(lead.pickup_location_id) or lead.pickup_location_id.name
+            lead_pickup = getattr(lead, 'pickup_location_id', False)
+            pickup_partner_id = lead_pickup.id if lead_pickup else False
 
             # -----------------------------
-            # Destino final desde CRM (si existe)
+            # Destino final desde CRM (Many2one)
             # -----------------------------
-            final_dest_addr = False
-            final_dest_partner_id = False
             lead_final_dest = getattr(lead, 'final_destination_id', False)
-            if lead_final_dest:
-                final_dest_partner_id = lead_final_dest.id
-                final_dest_addr = order._format_partner_address_one_line(lead_final_dest) or lead_final_dest.name
+            final_dest_partner_id = lead_final_dest.id if lead_final_dest else False
 
             update_vals = {
                 'service_frequency': getattr(lead, 'service_frequency', False),
                 'residue_new': getattr(lead, 'residue_new', False),
                 'requiere_visita': getattr(lead, 'requiere_visita', False),
 
-                'pickup_location': pickup_addr,
-                'pickup_location_manual': bool(pickup_addr),
+                # CAMBIO: guardar selección real
+                'pickup_location_id': pickup_partner_id,
+                'pickup_location_manual': bool(pickup_partner_id),
 
-                'final_destination': final_dest_addr,
-                'final_destination_manual': bool(final_dest_addr),
                 'final_destination_id': final_dest_partner_id,
+                'final_destination_manual': bool(final_dest_partner_id),
 
                 'always_service': True,
 
@@ -384,24 +383,24 @@ class SaleOrder(models.Model):
 
     def write(self, vals):
         """
-        - Si el usuario edita pickup_location, lo marcamos como manual.
-        - Si el usuario edita final_destination, lo marcamos como manual.
-        - Si cambian partner_id/partner_shipping_id y NO es manual, re-llenamos pickup_location.
+        - Si el usuario edita pickup_location_id, lo marcamos como manual.
+        - Si el usuario edita final_destination_id, lo marcamos como manual.
+        - Si cambian partner_id/partner_shipping_id y NO es manual, re-llenamos pickup_location_id.
         """
         if self.env.context.get('skip_pickup_autofill'):
             return super().write(vals)
 
-        # Marcar manual si se editan explícitamente
-        if 'pickup_location' in vals:
-            vals['pickup_location_manual'] = bool(vals.get('pickup_location'))
+        # Marcar manual si se editan explícitamente (Many2one)
+        if 'pickup_location_id' in vals:
+            vals['pickup_location_manual'] = bool(vals.get('pickup_location_id'))
 
-        if 'final_destination' in vals:
-            vals['final_destination_manual'] = bool(vals.get('final_destination'))
+        if 'final_destination_id' in vals:
+            vals['final_destination_manual'] = bool(vals.get('final_destination_id'))
 
         res = super().write(vals)
 
-        # Re-llenar pickup_location si cambió partner/shipping y no es manual
-        if 'pickup_location' not in vals and any(k in vals for k in ('partner_id', 'partner_shipping_id')):
+        # Re-llenar pickup_location_id si cambió partner/shipping y no es manual
+        if 'pickup_location_id' not in vals and any(k in vals for k in ('partner_id', 'partner_shipping_id')):
             self._autofill_pickup_location(force=True)
         else:
             self._autofill_pickup_location(force=False)
