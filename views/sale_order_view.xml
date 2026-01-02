@@ -40,16 +40,17 @@
 
               <!-- CAMBIO: selector real como CRM -->
               <field name="final_destination_id"
-                     widget="res_partner_many2one"
-                     context="{
+                    widget="res_partner_many2one"
+                    context="{
                         'default_parent_id': partner_id,
                         'default_type': 'delivery',
                         'show_address': 1
-                     }"
-                     domain="['|', ('parent_id', '=', partner_id), ('id', '=', partner_id)]"
-                     options="{'always_reload': True, 'no_quick_create': True}"
-                     placeholder="Seleccionar destino final..."
+                    }"
+                    domain="[('category_id.name', '=', 'Destino Final')]"
+                    options="{'always_reload': True, 'no_quick_create': True}"
+                    placeholder="Seleccionar destino final..."
               />
+
 
             </group>
             <group>
