@@ -9,7 +9,39 @@ class SaleOrder(models.Model):
     # -------------------------------------------------------------------------
     # CAMPOS (CRM -> SALE)
     # -------------------------------------------------------------------------
-    service_frequency = fields.Char(string='Frecuencia del Servicio')
+    
+
+    def _get_service_frequency_selection(self):
+        """
+        Reutiliza exactamente el selection definido en crm.lead.service_frequency
+        (campo definido en tu módulo crm_custom_fields).
+        """
+        Lead = self.env['crm.lead']
+        lead_field = Lead._fields.get('service_frequency')
+        if not lead_field or getattr(lead_field, 'type', None) != 'selection':
+            return []
+
+        sel = lead_field.selection
+        # Puede venir como lista o como callable (método)
+        if callable(sel):
+            # Normalmente acepta un recordset (aunque esté vacío)
+            try:
+                return sel(Lead)
+            except TypeError:
+                # Fallbacks por si tu implementación de CRM usa otra firma
+                try:
+                    return sel(self.env)
+                except Exception:
+                    return []
+        return sel or []
+
+    service_frequency = fields.Selection(
+        selection=lambda self: self._get_service_frequency_selection(),
+        string='Frecuencia del Servicio'
+    )
+
+
+
     residue_new = fields.Boolean(string='¿Residuo Nuevo?')
     requiere_visita = fields.Boolean(string='Requiere visita presencial')
 
