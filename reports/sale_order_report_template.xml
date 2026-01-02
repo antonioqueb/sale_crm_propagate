@@ -80,9 +80,17 @@
                 <div class="col-4" t-if="doc.service_frequency">
                     <strong>Frecuencia del Servicio:</strong> <span t-field="doc.service_frequency"/>
                 </div>
-                <div class="col-4" t-if="doc.pickup_location">
+
+                <!-- FIX: ya no existe doc.pickup_location (Char). Ahora es Many2one -->
+                <div class="col-4" t-if="doc.pickup_location_id">
                     <strong>Ubicación de recolección:</strong>
-                    <span t-esc="(doc.pickup_location or '').replace('\n', ', ')"/>
+                    <span t-esc="((doc.pickup_location_id._display_address() or doc.pickup_location_id.name or '').replace('\n', ', '))"/>
+                </div>
+
+                <!-- OPCIONAL: Destino final (Many2one). Si no lo quieres, elimina este bloque -->
+                <div class="col-4" t-if="doc.final_destination_id">
+                    <strong>Destino final:</strong>
+                    <span t-esc="((doc.final_destination_id._display_address() or doc.final_destination_id.name or '').replace('\n', ', '))"/>
                 </div>
             </div>
         </xpath>
