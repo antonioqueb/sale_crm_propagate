@@ -4,6 +4,7 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
+
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
@@ -28,7 +29,7 @@ class SaleOrderLine(models.Model):
 
         vals = {'name': 'Unidad de servicio'}
         candidates = [
-            'category_id', 'uom_type', 'factor', 'factor_inv', 
+            'category_id', 'uom_type', 'factor', 'factor_inv',
             'ratio', 'ratio_inv', 'rounding', 'active', 'relative_uom_id'
         ]
         for f in candidates:
@@ -80,27 +81,34 @@ class SaleOrderLine(models.Model):
     def _create_service_product(self):
         """
         Crea el producto real basado en los datos de la línea.
-        Eliminado ensure_one() para soportar creación en onchange (NewId).
+        CORREGIDO: Manejo robusto para evitar productos huérfanos.
         """
         # Validación mínima
-        if not (self.create_new_service and self.residue_name):
+        if not self.residue_name:
+            _logger.debug("_create_service_product: sin residue_name, abortando")
             return None
 
-        # Evitar crear duplicados si ya tengo un product_id con el mismo nombre
-        if self.product_id and self.product_id.name == self.residue_name:
-            return self.product_id
+        # CORRECCIÓN: Verificar si ya existe un producto con este nombre
+        Product = self.env['product.product'].sudo()
+        existing = Product.search([('name', '=', self.residue_name)], limit=1)
+        if existing:
+            _logger.debug("_create_service_product: producto existente encontrado: %s", existing.name)
+            return existing
+
+        # Evitar crear duplicados si ya tengo un product_id válido
+        # CORRECCIÓN: Verificar que product_id sea un registro real (no NewId)
+        if self.product_id and isinstance(self.product_id.id, int) and self.product_id.id > 0:
+            if self.product_id.name == self.residue_name:
+                _logger.debug("_create_service_product: usando product_id existente: %s", self.product_id.name)
+                return self.product_id
 
         Category = self.env['product.category'].sudo()
-        Product = self.env['product.product'].sudo()
 
         category = Category.search([('name', 'ilike', 'servicios de residuos')], limit=1)
         if not category:
             category = Category.create({'name': 'Servicios de Residuos'})
 
         service_uom = self._get_or_create_service_uom()
-        
-        # MODIFICACIÓN: Ya no generamos la descripción larga con Plan/Tipo/Capacidad.
-        # desc = f"Residuo: {self.residue_name}\nPlan: {plan_label}\nTipo: {type_label}..."
 
         vals = {
             'name': self.residue_name,
@@ -108,27 +116,28 @@ class SaleOrderLine(models.Model):
             'categ_id': category.id,
             'sale_ok': True,
             'purchase_ok': False,
-            # 'description_sale': desc,  <-- Se omite para que no se guarde en el producto
             'uom_id': service_uom.id if service_uom else False,
         }
-        
-        # En Odoo 19 es posible que uom_po_id no exista o sea requerido, lo manejamos seguro
+
+        # En Odoo 19 es posible que uom_po_id no exista o sea requerido
         if 'uom_po_id' in Product._fields and service_uom:
-             vals['uom_po_id'] = service_uom.id
+            vals['uom_po_id'] = service_uom.id
 
         safe_vals = {k: v for k, v in vals.items() if k in Product._fields}
-        
+
         try:
-            return Product.create(safe_vals)
+            product = Product.create(safe_vals)
+            _logger.info("Producto servicio creado: %s (ID: %s)", product.name, product.id)
+            return product
         except Exception as e:
-            _logger.error(f"Error creando producto servicio: {e}")
-            return False
+            _logger.error("Error creando producto servicio: %s", e)
+            return None
 
     # -------------------------------------------------------------------------
     # CAMPOS
     # -------------------------------------------------------------------------
     residue_type = fields.Selection([('rsu', 'RSU'), ('rme', 'RME'), ('rp', 'RP')], string='Tipo de manejo')
-    
+
     plan_manejo = fields.Selection([
         ('reciclaje', 'Reciclaje'),
         ('aprovechamiento_energetico', 'Aprovechamiento Energético'),
@@ -153,9 +162,9 @@ class SaleOrderLine(models.Model):
     residue_capacity = fields.Char(string='Capacidad')
     residue_weight_kg = fields.Float(string="Peso Total (kg)", default=0.0)
     residue_volume = fields.Float(string="Unidades", default=1.0)
-    
+
     weight_per_unit = fields.Float(string="Kg por Unidad", compute="_compute_weight_per_unit", store=True)
-    
+
     residue_uom_id = fields.Many2one('uom.uom', string="Unidad de Medida Base", default=lambda self: self._get_or_create_service_uom())
 
     # -------------------------------------------------------------------------
@@ -193,15 +202,11 @@ class SaleOrderLine(models.Model):
             service = self.existing_service_id
             self.product_id = service.id
             self.product_template_id = service.product_tmpl_id.id
-            
-            # MODIFICACIÓN: Usar SOLO el nombre del servicio, ignorando description_sale
             self.name = service.name
-            
             self.residue_name = service.name
-            
+
             uom = self._get_or_create_service_uom()
             self.residue_uom_id = uom
-            # SIEMPRE usar la UoM del servicio, no del embalaje
             self.product_uom_id = uom
 
             self.create_new_packaging = False
@@ -210,53 +215,87 @@ class SaleOrderLine(models.Model):
 
     @api.onchange('residue_packaging_id')
     def _onchange_residue_packaging(self):
-        """
-        CORRECCIÓN: Ya NO sobrescribimos product_uom_id con el embalaje.
-        Solo almacenamos el embalaje en su campo.
-        """
+        """Ya NO sobrescribimos product_uom_id con el embalaje."""
         pass
-    
+
     @api.onchange('residue_uom_id')
     def _onchange_residue_uom(self):
-        """
-        Si cambia la UoM del residuo, actualizamos la del producto.
-        """
+        """Si cambia la UoM del residuo, actualizamos la del producto."""
         if self.residue_uom_id:
             self.product_uom_id = self.residue_uom_id
 
     @api.onchange('residue_name', 'plan_manejo', 'residue_type', 'residue_capacity')
     def _onchange_residue_fields(self):
         """
-        Crea el producto 'al vuelo' cuando el usuario llena los datos mínimos.
+        CORREGIDO: NO crear producto en onchange.
+        Solo preparar los datos, la creación real ocurre en create/write.
         """
         if self.create_new_service and self.residue_name:
-            # Crear el producto inmediatamente
-            new_product = self._create_service_product()
-            if new_product:
-                self.product_id = new_product.id
-                
-                # MODIFICACIÓN: Usar SOLO el nombre, sin description_sale
-                self.name = new_product.name
-                
-                # Usar la UoM del nuevo producto (que es 'Unidad de servicio')
-                if new_product.uom_id:
-                    self.product_uom_id = new_product.uom_id
-                elif self.residue_uom_id:
-                     self.product_uom_id = self.residue_uom_id
+            # Usar el nombre como descripción temporal
+            self.name = self.residue_name
+            
+            # Asegurar UoM correcta
+            uom = self._get_or_create_service_uom()
+            if uom:
+                self.product_uom_id = uom
+                self.residue_uom_id = uom
 
     # -------------------------------------------------------------------------
-    # CRUD
+    # CRUD - CORRECCIÓN PRINCIPAL
     # -------------------------------------------------------------------------
     @api.model_create_multi
     def create(self, vals_list):
         uom_service = self._get_or_create_service_uom()
+        
         for vals in vals_list:
+            # Asegurar UoM por defecto
             if not vals.get('residue_uom_id') and uom_service:
                 vals['residue_uom_id'] = uom_service.id
-            
-            # Asegurar que product_uom_id sea la del servicio, NO la del embalaje
             if not vals.get('product_uom_id') and uom_service:
                 vals['product_uom_id'] = uom_service.id
+
+            # CORRECCIÓN PRINCIPAL: Crear producto ANTES de crear la línea
+            if vals.get('create_new_service') and vals.get('residue_name') and not vals.get('product_id'):
+                _logger.info("create(): Creando producto para residue_name='%s'", vals.get('residue_name'))
+                
+                # Buscar producto existente primero
+                Product = self.env['product.product'].sudo()
+                existing = Product.search([('name', '=', vals['residue_name'])], limit=1)
+                
+                if existing:
+                    vals['product_id'] = existing.id
+                    _logger.info("create(): Producto existente encontrado: %s", existing.id)
+                else:
+                    # Crear el producto
+                    Category = self.env['product.category'].sudo()
+                    category = Category.search([('name', 'ilike', 'servicios de residuos')], limit=1)
+                    if not category:
+                        category = Category.create({'name': 'Servicios de Residuos'})
+                    
+                    product_vals = {
+                        'name': vals['residue_name'],
+                        'type': 'service',
+                        'categ_id': category.id,
+                        'sale_ok': True,
+                        'purchase_ok': False,
+                    }
+                    if uom_service:
+                        product_vals['uom_id'] = uom_service.id
+                        if 'uom_po_id' in Product._fields:
+                            product_vals['uom_po_id'] = uom_service.id
+                    
+                    try:
+                        new_product = Product.create(product_vals)
+                        vals['product_id'] = new_product.id
+                        _logger.info("create(): Producto creado: %s (ID: %s)", new_product.name, new_product.id)
+                    except Exception as e:
+                        _logger.error("create(): Error creando producto: %s", e)
+            
+            # Asegurar descripción
+            if vals.get('product_id') and not vals.get('name'):
+                product = self.env['product.product'].browse(vals['product_id'])
+                if product.exists():
+                    vals['name'] = product.name
 
         lines = super().create(vals_list)
 
@@ -264,42 +303,39 @@ class SaleOrderLine(models.Model):
             # 1. Crear Embalaje si hace falta
             if line.create_new_packaging and line.packaging_name:
                 line._create_or_update_packaging_v19(line)
-            
-            # CORRECCIÓN: No sobrescribir product_uom_id con residue_packaging_id
-            # El embalaje queda solo en line.residue_packaging_id
 
-            # 2. El servicio generalmente ya se creó en onchange, 
-            # pero por seguridad verificamos:
+            # 2. Verificación de seguridad: si aún no hay producto, intentar crearlo
             if line.create_new_service and not line.product_id and line.residue_name:
+                _logger.warning("create() post: Línea %s sin product_id, reintentando...", line.id)
                 service = line._create_service_product()
                 if service:
-                    line.product_id = service.id
-                    line.product_uom_qty = line.residue_volume
-                    # MODIFICACIÓN: Asegurar que la descripción de la línea sea solo el nombre
-                    line.name = service.name
-                    # Aseguramos UoM correcta
-                    if service.uom_id:
-                        line.product_uom_id = service.uom_id
+                    line.write({
+                        'product_id': service.id,
+                        'name': service.name,
+                        'product_uom_id': service.uom_id.id if service.uom_id else False,
+                    })
 
         return lines
 
     def write(self, vals):
         res = super().write(vals)
+        
         for line in self:
             # Embalaje
             if 'create_new_packaging' in vals or 'packaging_name' in vals:
                 line._create_or_update_packaging_v19(line)
-                # CORRECCIÓN: No tocamos product_uom_id aquí
 
-            # Servicio
-            if line.create_new_service and line.residue_name and (not line.product_id or line.product_id.name != line.residue_name):
-                if not line.product_id:
-                     service = line._create_service_product()
-                     if service:
-                         line.product_id = service.id
-                         # MODIFICACIÓN: Asegurar que la descripción sea solo el nombre
-                         line.name = service.name
-                         # Aseguramos UoM correcta
-                         if service.uom_id:
-                            line.product_uom_id = service.uom_id
+            # CORRECCIÓN: Crear producto si falta después de write
+            if line.create_new_service and line.residue_name and not line.product_id:
+                _logger.info("write(): Línea %s sin product_id, creando...", line.id)
+                service = line._create_service_product()
+                if service:
+                    # Usar SQL directo para evitar recursión
+                    self.env.cr.execute("""
+                        UPDATE sale_order_line 
+                        SET product_id = %s, name = %s
+                        WHERE id = %s
+                    """, (service.id, service.name, line.id))
+                    line.invalidate_recordset(['product_id', 'name'])
+                    
         return res
